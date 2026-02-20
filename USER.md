@@ -8,6 +8,7 @@ _Learn about the person you're helping. Update this as you go._
 - **Pronouns:** _(optional)_
 - **Timezone:**
 - **Notes:**
+  - 존댓말 선호
 
 ## Context
 
