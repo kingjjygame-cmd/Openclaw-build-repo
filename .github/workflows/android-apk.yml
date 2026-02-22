@@ -1,0 +1,58 @@
+name: Android APK Build (GitHub Actions)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["master"]
+    paths:
+      - "app-android-todo/**"
+
+jobs:
+  build-apk:
+    name: Build Debug APK
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+          cache-dependency-path: app-android-todo/package-lock.json
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install dependencies
+        working-directory: app-android-todo
+        run: npm ci
+
+      - name: Generate Android project
+        working-directory: app-android-todo
+        run: npx expo prebuild --platform android --non-interactive
+
+      - name: Build Debug APK
+        working-directory: app-android-todo/android
+        run: ./gradlew assembleDebug
+
+      - name: Locate APK
+        id: apk
+        run: |
+          APK_PATH="$(find app-android-todo/android/app/build/outputs/apk/debug -name 'app-debug.apk' | head -n 1)"
+          echo "Found APK: $APK_PATH"
+          echo "apk_path=$APK_PATH" >> "$GITHUB_OUTPUT"
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: openclaw-todo-debug-apk
+          path: ${{ steps.apk.outputs.apk_path }}
+          retention-days: 30
