@@ -76,7 +76,7 @@ jobs:
           echo "- APK path: ${APK_PATH}" >> $GITHUB_STEP_SUMMARY
 
       - name: Send APK download note by email
-        if: github.event_name == 'workflow_dispatch' && github.event.inputs.send_email == 'true' && secrets.SMTP_HOST != '' && secrets.SMTP_USER != '' && secrets.SMTP_PASSWORD != ''
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.send_email == 'true'
         uses: dawidd6/action-send-mail@v6
         with:
           server_address: ${{ secrets.SMTP_HOST }}
