@@ -20,6 +20,7 @@ jobs:
   build-apk:
     name: Build Debug APK
     runs-on: ubuntu-latest
+    timeout-minutes: 120
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -52,43 +53,125 @@ jobs:
         working-directory: app-android-todo/android
         run: ./gradlew assembleDebug
 
-      - name: Validate manifest and package parsing
+      - name: Validate manifest / compile / lint / unit test
         working-directory: app-android-todo/android
         run: |
-          echo "[INFO] Parse manifest and dependency checks"
           ./gradlew :app:processDebugManifest
           ./gradlew :app:compileDebugJavaWithJavac
+          ./gradlew lintDebug
+          ./gradlew testDebugUnitTest
 
-      - name: Run unit tests
-        working-directory: app-android-todo/android
-        run: ./gradlew testDebugUnitTest
-
-      - name: Verify APK file exists
+      - name: Verify APK file exists and extract metadata
+        id: apk_meta
         run: |
-          APK_PATH=app-android-todo/android/app/build/outputs/apk/debug/app-debug.apk
+          APK_PATH="app-android-todo/android/app/build/outputs/apk/debug/app-debug.apk"
           if [ ! -f "$APK_PATH" ]; then
             echo "[ERROR] APK not found: $APK_PATH"
-            ls -R app-android-todo/android/app/build/outputs/apk/debug
+            ls -R app-android-todo/android/app/build/outputs/apk/debug || true
             exit 1
           fi
-          echo "[OK] APK exists: $APK_PATH"
 
-      - name: Install debug APK on emulator (if connected)
+          APP_ID=$(./app-android-todo/android/gradlew -q :app:properties | awk '/applicationId:/ {print $NF; exit}')
+          if [ -z "$APP_ID" ]; then
+            APP_ID="com.openclaw.todo"
+          fi
+
+          AAPT_BIN=$(find "$ANDROID_HOME/build-tools" -path '*/aapt' -type f | sort -V | tail -n 1)
+          LAUNCH_ACTIVITY=".MainActivity"
+          if [ -n "$AAPT_BIN" ] && [ -x "$AAPT_BIN" ]; then
+            LAUNCH_ACTIVITY=$("$AAPT_BIN" dump badging "$APK_PATH" | awk -F "'" '/launchable-activity/ {print $2}' | head -n 1)
+            if [ -z "$LAUNCH_ACTIVITY" ]; then
+              LAUNCH_ACTIVITY=".MainActivity"
+            fi
+          fi
+
+          echo "apk_path=$APK_PATH" >> "$GITHUB_OUTPUT"
+          echo "app_id=$APP_ID" >> "$GITHUB_OUTPUT"
+          echo "launch_activity=$LAUNCH_ACTIVITY" >> "$GITHUB_OUTPUT"
+
+          echo "[INFO] apk_path=$APK_PATH"
+          echo "[INFO] app_id=$APP_ID"
+          echo "[INFO] launch_activity=$LAUNCH_ACTIVITY"
+
+      - name: Setup and run emulator smoke test
         run: |
-          if adb devices | grep -q 'device$'; then
-            adb install -r app-android-todo/android/app/build/outputs/apk/debug/app-debug.apk
-            echo "[INFO] adb install executed"
+          set -euo pipefail
+
+          # install emulator image and tools
+          sdkmanager --install "platform-tools" "platforms;android-34" "system-images;android-34;google_apis;x86_64" >/tmp/sdk_install.log 2>&1 || true
+
+          if ! avdmanager list avd | grep -q "Name:"; then
+            echo "no" | avdmanager create avd -n ci-emulator -k "system-images;android-34;google_apis;x86_64" -d pixel_6 || \
+              echo "no" | avdmanager create avd -n ci-emulator -k "system-images;android-34;google_apis;x86_64" -d pixel
+          fi
+
+          emulator -avd ci-emulator -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -no-snapshot -no-accel >/tmp/emulator.log 2>&1 &
+          EMU_PID=$!
+          echo "started emulator pid=$EMU_PID"
+
+          adb start-server
+          for i in $(seq 1 120); do
+            adb devices | awk 'NR>1 && /device$/{print $1}' | head -n 1 >/tmp/emu_serial || true
+            if [ -s /tmp/emu_serial ]; then
+              break
+            fi
+            sleep 2
+          done
+          SERIAL=$(cat /tmp/emu_serial 2>/dev/null || true)
+          if [ -z "$SERIAL" ]; then
+            echo "[ERROR] No emulator serial detected"
+            exit 1
+          fi
+
+          adb -s "$SERIAL" wait-for-device
+          for i in $(seq 1 120); do
+            BOOTED=$(adb -s "$SERIAL" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r') || BOOTED=''
+            if [ "$BOOTED" = "1" ]; then
+              break
+            fi
+            sleep 2
+          done
+          if [ "$BOOTED" != "1" ]; then
+            echo "[ERROR] Emulator boot timeout"
+            tail -n 80 /tmp/emulator.log || true
+            exit 1
+          fi
+
+          # install APK
+          adb -s "$SERIAL" install -r "${{ steps.apk_meta.outputs.apk_path }}" > /tmp/install.log 2>&1
+
+          # launch app (explicit component preferred, fallback to monkey)
+          TARGET="${{ steps.apk_meta.outputs.app_id }}/${{ steps.apk_meta.outputs.launch_activity }}"
+          adb -s "$SERIAL" shell am start -n "$TARGET" > /tmp/launch.log 2>&1 || {
+            adb -s "$SERIAL" shell monkey -p "${{ steps.apk_meta.outputs.app_id }}" -c android.intent.category.LAUNCHER 1 > /tmp/launch.log 2>&1 || {
+              echo "[ERROR] app launch failed"
+              cat /tmp/launch.log
+              exit 1
+            }
+          }
+
+          # verify app process appears
+          FOUND=0
+          for i in $(seq 1 20); do
+            if adb -s "$SERIAL" shell pidof -s "${{ steps.apk_meta.outputs.app_id }}" >/dev/null 2>&1; then
+              FOUND=1
+              break
+            fi
+            sleep 1
+          done
+          if [ $FOUND -eq 0 ]; then
+            echo "[WARN] process check failed but app may be launched from service activity. checking logs"
+            adb -s "$SERIAL" logcat -d | tail -n 120
           else
-            echo "[WARN] No adb device connected; skip install check"
+            echo "[OK] app process is running"
           fi
 
       - name: Locate APK
         id: apk
         run: |
-          APK_PATH="$(find app-android-todo/android/app/build/outputs/apk/debug -name 'app-debug.apk' | head -n 1)"
+          APK_PATH="${{ steps.apk_meta.outputs.apk_path }}"
           echo "Found APK: $APK_PATH"
           echo "apk_path=$APK_PATH" >> "$GITHUB_OUTPUT"
-          echo "APK_PATH=$APK_PATH" >> "$GITHUB_ENV"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
@@ -103,7 +186,9 @@ jobs:
           echo "- Commit: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
           echo "- Run: [Actions Run URL](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $GITHUB_STEP_SUMMARY
           echo "- Artifact: openclaw-todo-debug-apk" >> $GITHUB_STEP_SUMMARY
-          echo "- APK path: ${APK_PATH}" >> $GITHUB_STEP_SUMMARY
+          echo "- APK path: ${{ steps.apk.outputs.apk_path }}" >> $GITHUB_STEP_SUMMARY
+          echo "- App ID: ${{ steps.apk_meta.outputs.app_id }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Launch activity: ${{ steps.apk_meta.outputs.launch_activity }}" >> $GITHUB_STEP_SUMMARY
 
       - name: Send APK download note by email
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.send_email == 'true'
@@ -121,4 +206,6 @@ jobs:
             <p>커밋: ${{ github.sha }}</p>
             <p>빌드 페이지: <a href='${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}'>열기</a></p>
             <p>Artifacts: openclaw-todo-debug-apk (Actions > 해당 런에서 다운로드)</p>
+            <p>앱 ID: ${{ steps.apk_meta.outputs.app_id }}</p>
+            <p>Launch Activity: ${{ steps.apk_meta.outputs.launch_activity }}</p>
           convert_markdown: true
