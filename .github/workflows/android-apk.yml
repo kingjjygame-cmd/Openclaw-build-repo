@@ -97,8 +97,9 @@ jobs:
         run: |
           set -euo pipefail
 
-          # install emulator image and tools
-          sdkmanager --install "platform-tools" "platforms;android-34" "system-images;android-34;google_apis;x86_64" >/tmp/sdk_install.log 2>&1 || true
+          # ensure emulator binary available
+          sdkmanager --install "platform-tools" "platforms;android-34" "system-images;android-34;google_apis;x86_64" "emulator" >/tmp/sdk_install.log 2>&1 || true
+          export PATH="$ANDROID_HOME/emulator:$ANDROID_HOME/platform-tools:$PATH"
 
           if ! avdmanager list avd | grep -q "Name:"; then
             echo "no" | avdmanager create avd -n ci-emulator -k "system-images;android-34;google_apis;x86_64" -d pixel_6 ||               echo "no" | avdmanager create avd -n ci-emulator -k "system-images;android-34;google_apis;x86_64" -d pixel
