@@ -97,12 +97,20 @@ jobs:
         run: |
           set -euo pipefail
 
-          # ensure emulator binary available
+          # ensure emulator binary available and stable HOME for AVD
           sdkmanager --install "platform-tools" "platforms;android-34" "system-images;android-34;google_apis;x86_64" "emulator" >/tmp/sdk_install.log 2>&1 || true
           export PATH="$ANDROID_HOME/emulator:$ANDROID_HOME/platform-tools:$PATH"
+          export ANDROID_AVD_HOME="/tmp/.android/avd"
+          mkdir -p "$ANDROID_AVD_HOME"
 
-          if ! avdmanager list avd | grep -q "Name:"; then
-            echo "no" | avdmanager create avd -n ci-emulator -k "system-images;android-34;google_apis;x86_64" -d pixel_6 ||               echo "no" | avdmanager create avd -n ci-emulator -k "system-images;android-34;google_apis;x86_64" -d pixel
+          if ! avdmanager list avd | grep -q "Name: ci-emulator"; then
+            avdmanager create avd -n ci-emulator -k "system-images;android-34;google_apis;x86_64" -d "pixel_6" --force < /dev/null
+          fi
+
+          if ! avdmanager list avd | grep -q "Name: ci-emulator"; then
+            echo "[ERROR] AVD create failed"
+            avdmanager list avd || true
+            exit 1
           fi
 
           emulator -avd ci-emulator -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -no-snapshot -no-accel >/tmp/emulator.log 2>&1 &
@@ -110,7 +118,7 @@ jobs:
           echo "started emulator pid=$EMU_PID"
 
           adb start-server
-          for i in $(seq 1 120); do
+          for i in $(seq 1 180); do
             adb devices | awk 'NR>1 && /emulator/{print $1}' | head -n 1 >/tmp/emu_serial || true
             if [ -s /tmp/emu_serial ]; then
               break
@@ -122,18 +130,17 @@ jobs:
             echo "[ERROR] No emulator serial detected"
             echo "[ERROR] adb devices output:"
             adb devices
+            echo "[ERROR] avd list:"
+            avdmanager list avd || true
             echo "[ERROR] emulator log tail:"
             tail -n 120 /tmp/emulator.log || true
             exit 1
           fi
 
           adb -s "$SERIAL" wait-for-device
-          for i in $(seq 1 120); do
-            BOOTED=$(adb -s "$SERIAL" shell getprop sys.boot_completed 2>/dev/null | tr -d $'\r')
-            if [ -z "$BOOTED" ]; then
-              BOOTED=''
-            fi
-            STATE=$(adb -s "$SERIAL" get-state 2>/dev/null | tr -d $'\r' || true)
+          for i in $(seq 1 180); do
+            BOOTED=$(adb -s "$SERIAL" shell getprop sys.boot_completed 2>/dev/null | tr -d $'')
+            STATE=$(adb -s "$SERIAL" get-state 2>/dev/null | tr -d $'' || true)
             if [ "$BOOTED" = "1" ] || [ "$STATE" = "device" ]; then
               break
             fi
@@ -146,26 +153,22 @@ jobs:
             exit 1
           fi
 
-          # install APK
-          adb -s "$SERIAL" install -r "${{ steps.apk_meta.outputs.apk_path }}" > /tmp/install.log 2>&1
-          CODE=$?
-          if [ $CODE -ne 0 ]; then
+          echo "[INFO] install APK"
+          if ! adb -s "$SERIAL" install -r "${{ steps.apk_meta.outputs.apk_path }}" > /tmp/install.log 2>&1; then
             echo "[ERROR] adb install failed"
             cat /tmp/install.log
             exit 1
           fi
 
-          # launch app (explicit component preferred, fallback to monkey)
           TARGET="${{ steps.apk_meta.outputs.app_id }}/${{ steps.apk_meta.outputs.launch_activity }}"
-          adb -s "$SERIAL" shell am start -n "$TARGET" > /tmp/launch.log 2>&1 || {
+          if ! adb -s "$SERIAL" shell am start -n "$TARGET" > /tmp/launch.log 2>&1; then
             adb -s "$SERIAL" shell monkey -p "${{ steps.apk_meta.outputs.app_id }}" -c android.intent.category.LAUNCHER 1 > /tmp/launch.log 2>&1 || {
               echo "[ERROR] app launch failed"
               cat /tmp/launch.log
               exit 1
             }
-          }
+          fi
 
-          # verify app process appears
           FOUND=0
           for i in $(seq 1 20); do
             if adb -s "$SERIAL" shell pidof -s "${{ steps.apk_meta.outputs.app_id }}" >/dev/null 2>&1; then
@@ -174,7 +177,7 @@ jobs:
             fi
             sleep 1
           done
-          if [ $FOUND -eq 0 ]; then
+          if [ "$FOUND" -eq 0 ]; then
             echo "[WARN] process check failed but app may be launched from service activity. checking logs"
             adb -s "$SERIAL" logcat -d | tail -n 120
           else
