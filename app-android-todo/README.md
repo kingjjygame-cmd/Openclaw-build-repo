@@ -31,25 +31,30 @@ cd /home/kingjjy_game/.openclaw/workspace/app-android-todo
 
 ---
 ## 3) GitHub Actions로 APK 빌드 (권장)
-이 방법은 로컬에서 `npm run free-env` 없이 GitHub에서 바로 APK를 생성합니다.
+이 방법은 로컬 환경 의존 없이 GitHub에서 APK를 생성합니다.
 
 ### 3-1) 워크플로우 개요
-- `master` 브랜치 push 또는 수동 실행 시 `app-android-todo` 기준 빌드 실행
+- `master` 브랜치 push 또는 Actions 수동 실행 시 `app-android-todo` 기준 빌드 실행
 - `android/app/build/outputs/apk/debug/app-debug.apk` 생성
-- GitHub Artifacts로 파일 보관 (30일)
+- GitHub Artifacts로 `openclaw-todo-debug-apk` 업로드(30일 보관)
 
 ### 3-2) 실행 방법
-1. GitHub 저장소에 소스 push
-2. Actions 탭 → **Android APK Build (GitHub Actions)** 실행
+1. GitHub 저장소에 `app-android-todo` 코드와 워크플로우를 푸시
+2. GitHub Actions 탭 → `Android APK Build (GitHub Actions)` 실행 (수동 실행 가능)
 3. 완료 후 Artifacts에서 `openclaw-todo-debug-apk` 다운로드
 
-장점:
-- APK 파일 생성
-- 별도 `EXPO_TOKEN` 불필요
-- 로컬 환경이 없어도 빌드 가능
+### 3-3) 메일 자동 전송(선택)
+수동 실행 시 `send_email=true`로 하면 다음 비밀값이 있을 때 메일을 전송합니다.
 
-주의:
-- 기본은 Debug APK(`assembleDebug`)이므로 배포용 서명(AAB)은 별도 설정 필요.
+필수 Secret:
+- `SMTP_HOST`
+- `SMTP_PORT`
+- `SMTP_USER`
+- `SMTP_PASSWORD`
+
+기본 수신 메일은 `kingjjy.game@gmail.com`이며, 입력값으로 변경 가능합니다.
+
+참고: GitHub Actions에서 메일을 바로 보내려면 `SMTP` 세팅이 필요합니다.
 
 ---
 ## 4) 테스트 배포(Preview APK) 자동화

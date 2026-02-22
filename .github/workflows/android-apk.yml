@@ -2,6 +2,15 @@ name: Android APK Build (GitHub Actions)
 
 on:
   workflow_dispatch:
+    inputs:
+      send_email:
+        description: 'Send APK download link by email after build'
+        required: false
+        default: 'false'
+      target_email:
+        description: 'Recipient email'
+        required: false
+        default: 'kingjjy.game@gmail.com'
   push:
     branches: ["master"]
     paths:
@@ -49,6 +58,7 @@ jobs:
           APK_PATH="$(find app-android-todo/android/app/build/outputs/apk/debug -name 'app-debug.apk' | head -n 1)"
           echo "Found APK: $APK_PATH"
           echo "apk_path=$APK_PATH" >> "$GITHUB_OUTPUT"
+          echo "APK_PATH=$APK_PATH" >> "$GITHUB_ENV"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
@@ -56,3 +66,29 @@ jobs:
           name: openclaw-todo-debug-apk
           path: ${{ steps.apk.outputs.apk_path }}
           retention-days: 30
+
+      - name: Write summary
+        run: |
+          echo "### Android Debug APK Build Result" >> $GITHUB_STEP_SUMMARY
+          echo "- Commit: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Run: [Actions Run URL](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $GITHUB_STEP_SUMMARY
+          echo "- Artifact: openclaw-todo-debug-apk" >> $GITHUB_STEP_SUMMARY
+          echo "- APK path: ${APK_PATH}" >> $GITHUB_STEP_SUMMARY
+
+      - name: Send APK download note by email
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.send_email == 'true' && secrets.SMTP_HOST != '' && secrets.SMTP_USER != '' && secrets.SMTP_PASSWORD != ''
+        uses: dawidd6/action-send-mail@v6
+        with:
+          server_address: ${{ secrets.SMTP_HOST }}
+          server_port: ${{ secrets.SMTP_PORT || '465' }}
+          username: ${{ secrets.SMTP_USER }}
+          password: ${{ secrets.SMTP_PASSWORD }}
+          from: ${{ secrets.SMTP_USER }}
+          to: ${{ github.event.inputs.target_email }}
+          subject: "[OpenClaw Todo] GitHub Actions APK 빌드 완료"
+          html_body: |
+            <h3>OpenClaw Android APK 빌드 완료</h3>
+            <p>커밋: ${{ github.sha }}</p>
+            <p>빌드 페이지: <a href='${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}'>열기</a></p>
+            <p>Artifacts: openclaw-todo-debug-apk (Actions > 해당 런에서 다운로드)</p>
+          convert_markdown: true
