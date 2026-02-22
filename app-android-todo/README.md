@@ -114,3 +114,4 @@ TARGET_EMAIL="본인주소" ./scripts/build-then-mail-android.sh
 - 푸시 알림 리마인더
 - Google/카카오 로그인
 - Play Store 업로드용 AAB
+# workflow validation
