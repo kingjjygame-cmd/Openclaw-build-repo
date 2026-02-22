@@ -52,6 +52,36 @@ jobs:
         working-directory: app-android-todo/android
         run: ./gradlew assembleDebug
 
+      - name: Validate manifest and package parsing
+        working-directory: app-android-todo/android
+        run: |
+          echo "[INFO] Parse manifest and dependency checks"
+          ./gradlew :app:processDebugManifest
+          ./gradlew :app:compileDebugJavaWithJavac
+
+      - name: Run unit tests
+        working-directory: app-android-todo/android
+        run: ./gradlew testDebugUnitTest
+
+      - name: Verify APK file exists
+        run: |
+          APK_PATH=app-android-todo/android/app/build/outputs/apk/debug/app-debug.apk
+          if [ ! -f "$APK_PATH" ]; then
+            echo "[ERROR] APK not found: $APK_PATH"
+            ls -R app-android-todo/android/app/build/outputs/apk/debug
+            exit 1
+          fi
+          echo "[OK] APK exists: $APK_PATH"
+
+      - name: Install debug APK on emulator (if connected)
+        run: |
+          if adb devices | grep -q 'device$'; then
+            adb install -r app-android-todo/android/app/build/outputs/apk/debug/app-debug.apk
+            echo "[INFO] adb install executed"
+          else
+            echo "[WARN] No adb device connected; skip install check"
+          fi
+
       - name: Locate APK
         id: apk
         run: |
