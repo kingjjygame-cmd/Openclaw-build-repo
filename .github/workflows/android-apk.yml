@@ -128,8 +128,11 @@ jobs:
 
           adb -s "$SERIAL" wait-for-device
           for i in $(seq 1 120); do
-            BOOTED=$(adb -s "$SERIAL" shell getprop sys.boot_completed 2>/dev/null | tr -d '') || BOOTED=''
-            STATE=$(adb -s "$SERIAL" get-state 2>/dev/null | tr -d '' || true)
+            BOOTED=$(adb -s "$SERIAL" shell getprop sys.boot_completed 2>/dev/null | tr -d $'\r')
+            if [ -z "$BOOTED" ]; then
+              BOOTED=''
+            fi
+            STATE=$(adb -s "$SERIAL" get-state 2>/dev/null | tr -d $'\r' || true)
             if [ "$BOOTED" = "1" ] || [ "$STATE" = "device" ]; then
               break
             fi
