@@ -97,14 +97,18 @@ jobs:
         run: |
           set -euo pipefail
 
-          # ensure emulator binary available and stable HOME for AVD
-          sdkmanager --install "platform-tools" "platforms;android-34" "system-images;android-34;google_apis;x86_64" "emulator" >/tmp/sdk_install.log 2>&1 || true
+          # ensure emulator binary available and stable AVD home
+          sdkmanager --install "platform-tools" "platforms;android-34" "system-images;android-34;google_apis;arm64-v8a" "emulator" >/tmp/sdk_install.log 2>&1 || true
           export PATH="$ANDROID_HOME/emulator:$ANDROID_HOME/platform-tools:$PATH"
-          export ANDROID_AVD_HOME="/tmp/.android/avd"
-          mkdir -p "$ANDROID_AVD_HOME"
+          export ANDROID_SDK_HOME="/tmp/.android"
+          export ANDROID_AVD_HOME="$ANDROID_SDK_HOME/avd"
+          mkdir -p "$ANDROID_AVD_HOME" "$ANDROID_SDK_HOME"
+          mkdir -p /tmp/adb_keys && chmod 700 /tmp/adb_keys
+          adb kill-server || true
+          adb start-server
 
           if ! avdmanager list avd | grep -q "Name: ci-emulator"; then
-            avdmanager create avd -n ci-emulator -k "system-images;android-34;google_apis;x86_64" -d "pixel_6" --force < /dev/null
+            echo "no" | avdmanager create avd -n ci-emulator -k "system-images;android-34;google_apis;arm64-v8a" -d "pixel_6" --force
           fi
 
           if ! avdmanager list avd | grep -q "Name: ci-emulator"; then
@@ -113,11 +117,10 @@ jobs:
             exit 1
           fi
 
-          emulator -avd ci-emulator -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -no-snapshot -no-accel >/tmp/emulator.log 2>&1 &
+          emulator -avd ci-emulator -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -no-snapshot -memory 2048 -cores 2 -no-accel >/tmp/emulator.log 2>&1 &
           EMU_PID=$!
           echo "started emulator pid=$EMU_PID"
 
-          adb start-server
           for i in $(seq 1 180); do
             adb devices | awk 'NR>1 && /emulator/{print $1}' | head -n 1 >/tmp/emu_serial || true
             if [ -s /tmp/emu_serial ]; then
@@ -134,10 +137,10 @@ jobs:
             avdmanager list avd || true
             echo "[ERROR] emulator log tail:"
             tail -n 120 /tmp/emulator.log || true
+            adb kill-server || true
             exit 1
           fi
 
-          adb -s "$SERIAL" wait-for-device
           for i in $(seq 1 180); do
             BOOTED=$(adb -s "$SERIAL" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')
             STATE=$(adb -s "$SERIAL" get-state 2>/dev/null | tr -d '\r' || true)
@@ -150,25 +153,30 @@ jobs:
             echo "[ERROR] Emulator boot timeout"
             adb -s "$SERIAL" shell getprop | tail -n 30 || true
             tail -n 120 /tmp/emulator.log || true
+            adb kill-server || true
             exit 1
           fi
 
-          echo "[INFO] install APK"
+          # install APK
           if ! adb -s "$SERIAL" install -r "${{ steps.apk_meta.outputs.apk_path }}" > /tmp/install.log 2>&1; then
             echo "[ERROR] adb install failed"
             cat /tmp/install.log
+            adb kill-server || true
             exit 1
           fi
 
+          # launch app (explicit component preferred, fallback to monkey)
           TARGET="${{ steps.apk_meta.outputs.app_id }}/${{ steps.apk_meta.outputs.launch_activity }}"
           if ! adb -s "$SERIAL" shell am start -n "$TARGET" > /tmp/launch.log 2>&1; then
             adb -s "$SERIAL" shell monkey -p "${{ steps.apk_meta.outputs.app_id }}" -c android.intent.category.LAUNCHER 1 > /tmp/launch.log 2>&1 || {
               echo "[ERROR] app launch failed"
               cat /tmp/launch.log
+              adb kill-server || true
               exit 1
             }
           fi
 
+          # verify app process appears
           FOUND=0
           for i in $(seq 1 20); do
             if adb -s "$SERIAL" shell pidof -s "${{ steps.apk_meta.outputs.app_id }}" >/dev/null 2>&1; then
