@@ -101,8 +101,7 @@ jobs:
           sdkmanager --install "platform-tools" "platforms;android-34" "system-images;android-34;google_apis;x86_64" >/tmp/sdk_install.log 2>&1 || true
 
           if ! avdmanager list avd | grep -q "Name:"; then
-            echo "no" | avdmanager create avd -n ci-emulator -k "system-images;android-34;google_apis;x86_64" -d pixel_6 || \
-              echo "no" | avdmanager create avd -n ci-emulator -k "system-images;android-34;google_apis;x86_64" -d pixel
+            echo "no" | avdmanager create avd -n ci-emulator -k "system-images;android-34;google_apis;x86_64" -d pixel_6 ||               echo "no" | avdmanager create avd -n ci-emulator -k "system-images;android-34;google_apis;x86_64" -d pixel
           fi
 
           emulator -avd ci-emulator -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -no-snapshot -no-accel >/tmp/emulator.log 2>&1 &
@@ -111,7 +110,7 @@ jobs:
 
           adb start-server
           for i in $(seq 1 120); do
-            adb devices | awk 'NR>1 && /device$/{print $1}' | head -n 1 >/tmp/emu_serial || true
+            adb devices | awk 'NR>1 && /emulator/{print $1}' | head -n 1 >/tmp/emu_serial || true
             if [ -s /tmp/emu_serial ]; then
               break
             fi
@@ -120,25 +119,37 @@ jobs:
           SERIAL=$(cat /tmp/emu_serial 2>/dev/null || true)
           if [ -z "$SERIAL" ]; then
             echo "[ERROR] No emulator serial detected"
+            echo "[ERROR] adb devices output:"
+            adb devices
+            echo "[ERROR] emulator log tail:"
+            tail -n 120 /tmp/emulator.log || true
             exit 1
           fi
 
           adb -s "$SERIAL" wait-for-device
           for i in $(seq 1 120); do
-            BOOTED=$(adb -s "$SERIAL" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r') || BOOTED=''
-            if [ "$BOOTED" = "1" ]; then
+            BOOTED=$(adb -s "$SERIAL" shell getprop sys.boot_completed 2>/dev/null | tr -d '') || BOOTED=''
+            STATE=$(adb -s "$SERIAL" get-state 2>/dev/null | tr -d '' || true)
+            if [ "$BOOTED" = "1" ] || [ "$STATE" = "device" ]; then
               break
             fi
             sleep 2
           done
           if [ "$BOOTED" != "1" ]; then
             echo "[ERROR] Emulator boot timeout"
-            tail -n 80 /tmp/emulator.log || true
+            adb -s "$SERIAL" shell getprop | tail -n 30 || true
+            tail -n 120 /tmp/emulator.log || true
             exit 1
           fi
 
           # install APK
           adb -s "$SERIAL" install -r "${{ steps.apk_meta.outputs.apk_path }}" > /tmp/install.log 2>&1
+          CODE=$?
+          if [ $CODE -ne 0 ]; then
+            echo "[ERROR] adb install failed"
+            cat /tmp/install.log
+            exit 1
+          fi
 
           # launch app (explicit component preferred, fallback to monkey)
           TARGET="${{ steps.apk_meta.outputs.app_id }}/${{ steps.apk_meta.outputs.launch_activity }}"
