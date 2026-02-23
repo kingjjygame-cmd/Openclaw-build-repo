@@ -333,18 +333,8 @@ jobs:
           echo "- App ID: ${{ steps.apk_meta.outputs.app_id }}" >> $GITHUB_STEP_SUMMARY
           echo "- Launch activity: ${{ steps.apk_meta.outputs.launch_activity }}" >> $GITHUB_STEP_SUMMARY
 
-      - name: Progress check interval gate (every 10 runs)
-        id: notify_gate
-        run: |
-          RUN_NUMBER="${{ github.run_number }}"
-          if [ $((RUN_NUMBER % 10)) -eq 0 ] || [ "$RUN_NUMBER" = "10" ]; then
-            echo "notify=1" >> "$GITHUB_OUTPUT"
-          else
-            echo "notify=0" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Send APK download note by email
-        if: github.event_name == 'workflow_dispatch' && github.event.inputs.send_email == 'true' && steps.notify_gate.outputs.notify == '1'
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.send_email == 'true'
         uses: dawidd6/action-send-mail@v6
         with:
           server_address: ${{ secrets.SMTP_HOST }}
@@ -363,3 +353,63 @@ jobs:
             <p>Launch Activity: ${{ steps.apk_meta.outputs.launch_activity }}</p>
             <p>실행회차: ${{ github.run_number }}</p>
           convert_markdown: true
+
+      - name: Check failure streak every 10 (for user telegram alert)
+        id: fail_streak
+        if: failure() || cancelled()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+import json
+import urllib.request
+import os
+
+run_id = int("${{ github.run_id }}")
+repo = "${{ github.repository }}"
+branch = "${{ github.ref_name }}"
+output_file = os.environ['GITHUB_OUTPUT']
+url = f"https://api.github.com/repos/{repo}/actions/workflows/android-apk.yml/runs?per_page=30"
+req = urllib.request.Request(
+    url,
+    headers={
+        'Accept': 'application/vnd.github+json',
+        'Authorization': f"Bearer {os.environ['GH_TOKEN']}",
+        'User-Agent': 'openclaw'
+    }
+)
+
+with urllib.request.urlopen(req) as res:
+    data = json.load(res)
+
+streak = 1  # current failed run
+for run in data.get('workflow_runs', []):
+    if run['id'] == run_id:
+        continue
+    if run.get('head_branch') != branch:
+        continue
+    conclusion = run.get('conclusion')
+    if conclusion == 'failure' or conclusion == 'timed_out':
+        streak += 1
+        continue
+    break
+
+with open(output_file, 'a', encoding='utf-8') as f:
+    f.write(f"streak={streak}\n")
+    f.write(f"notify={'1' if streak % 10 == 0 else '0'}\n")
+          
+      - name: Notify keepalive on persistent failure (telegram)
+        if: steps.fail_streak.outputs.notify == '1' && always()
+        run: |
+          MESSAGE="[CI] Android APK Build failing for ${{ steps.fail_streak.outputs.streak }} runs continuously. Latest: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          if [ -n "${{ secrets.TELEGRAM_BOT_TOKEN }}" ] && [ -n "${{ secrets.TELEGRAM_CHAT_ID }}" ]; then
+            curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+              -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
+              -d text="$MESSAGE" \
+              -d disable_web_page_preview=true || true
+          else
+            echo "[WARN] Telegram secrets not set. Cannot send keep-alive message for failed run streak."
+          fi
+          echo "### Continuous failure alert" >> $GITHUB_STEP_SUMMARY
+          echo "- streak: ${{ steps.fail_streak.outputs.streak }}" >> $GITHUB_STEP_SUMMARY
+          echo "- run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" >> $GITHUB_STEP_SUMMARY
