@@ -71,9 +71,11 @@ jobs:
             exit 1
           fi
 
-          APP_ID=$(./app-android-todo/android/gradlew -q :app:properties | awk '/applicationId:/ {print $NF; exit}')
-          if [ -z "$APP_ID" ]; then
-            APP_ID="com.openclaw.todo"
+          APP_ID="com.openclaw.todo"
+          if APP_ID_FROM_GRADLE=$(cd app-android-todo/android && ./gradlew -q :app:properties 2>/tmp/gradle_prop.err | awk '/applicationId:/ {print $NF; exit}'); then
+            if [ -n "$APP_ID_FROM_GRADLE" ]; then
+              APP_ID="$APP_ID_FROM_GRADLE"
+            fi
           fi
 
           AAPT_BIN=$(find "$ANDROID_HOME/build-tools" -path '*/aapt' -type f | sort -V | tail -n 1)
@@ -167,13 +169,12 @@ jobs:
 
           # launch app (explicit component preferred, fallback to monkey)
           TARGET="${{ steps.apk_meta.outputs.app_id }}/${{ steps.apk_meta.outputs.launch_activity }}"
+          adb -s "$SERIAL" shell monkey -p "${{ steps.apk_meta.outputs.app_id }}" -c android.intent.category.LAUNCHER 1 > /tmp/launch.log 2>&1 || true
           if ! adb -s "$SERIAL" shell am start -n "$TARGET" > /tmp/launch.log 2>&1; then
-            adb -s "$SERIAL" shell monkey -p "${{ steps.apk_meta.outputs.app_id }}" -c android.intent.category.LAUNCHER 1 > /tmp/launch.log 2>&1 || {
-              echo "[ERROR] app launch failed"
-              cat /tmp/launch.log
-              adb kill-server || true
-              exit 1
-            }
+            echo "[ERROR] app launch failed"
+            cat /tmp/launch.log
+            adb kill-server || true
+            exit 1
           fi
 
           # verify app process appears
