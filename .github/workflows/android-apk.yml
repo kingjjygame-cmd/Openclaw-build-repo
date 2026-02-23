@@ -338,12 +338,16 @@ jobs:
         id: smtp_check
         run: |
           SMTP_HOST="${{ secrets.SMTP_HOST }}"
+          SMTP_PORT="${{ secrets.SMTP_PORT }}"
           SMTP_USER="${{ secrets.SMTP_USER }}"
           SMTP_PASSWORD="${{ secrets.SMTP_PASSWORD }}"
-          if [ -z "$SMTP_HOST" ] || [ -z "$SMTP_USER" ] || [ -z "$SMTP_PASSWORD" ]; then
+          SMTP_FROM="${{ secrets.SMTP_FROM }}"
+          RESOLVED_FROM="${SMTP_FROM:-$SMTP_USER}"
+
+          if [ -z "$SMTP_HOST" ] || [ -z "$SMTP_USER" ] || [ -z "$SMTP_PASSWORD" ] || [ -z "$RESOLVED_FROM" ]; then
             echo "missing=true" >> "$GITHUB_OUTPUT"
-            echo "SMTP config missing: check SMTP_HOST/SMTP_USER/SMTP_PASSWORD in repository secrets." >> "$GITHUB_STEP_SUMMARY"
-            echo "::warning::SMTP secret missing: cannot send email. Check SMTP_HOST/SMTP_USER/SMTP_PASSWORD in repository secrets."
+            echo "SMTP config missing/invalid: require SMTP_HOST, SMTP_USER, SMTP_PASSWORD, and RESOLVED FROM (SMTP_FROM or SMTP_USER)." >> "$GITHUB_STEP_SUMMARY"
+            echo "::warning::SMTP secret missing or invalid. Cannot send email until set." 
           else
             echo "missing=false" >> "$GITHUB_OUTPUT"
           fi
@@ -358,7 +362,7 @@ jobs:
           server_port: ${{ secrets.SMTP_PORT || '465' }}
           username: ${{ secrets.SMTP_USER }}
           password: ${{ secrets.SMTP_PASSWORD }}
-          from: ${{ secrets.SMTP_USER }}
+          from: ${{ secrets.SMTP_FROM || secrets.SMTP_USER }}
           to: ${{ github.event.inputs.target_email }}
           subject: "[OpenClaw Todo] GitHub Actions APK 빌드 완료 (#${{ github.run_number }})"
           html_body: |
@@ -375,7 +379,7 @@ jobs:
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.send_email == 'true'
         run: |
           if [ "${{ steps.smtp_check.outputs.missing }}" = "true" ]; then
-            echo "- Mail delivery skipped: SMTP secrets missing (SMTP_HOST/SMTP_USER/SMTP_PASSWORD)." >> "$GITHUB_STEP_SUMMARY"
+            echo "- Mail delivery skipped: SMTP secrets missing or incomplete (SMTP_HOST / SMTP_USER / SMTP_PASSWORD / SMTP_FROM)." >> "$GITHUB_STEP_SUMMARY"
             echo "[WARN] Mail delivery skipped due missing SMTP config."
           elif [ "${{ steps.send_mail.outcome }}" = "success" ]; then
             echo "- Mail delivery: action reported success." >> "$GITHUB_STEP_SUMMARY"
