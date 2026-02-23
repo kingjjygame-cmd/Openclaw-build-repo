@@ -15,6 +15,8 @@ on:
     branches: ["master"]
     paths:
       - "app-android-todo/**"
+      - ".github/workflows/android-apk.yml"
+      - ".github/workflows/**/*.yml"
 
 jobs:
   build-apk:
@@ -248,8 +250,10 @@ jobs:
 
           echo "[INFO] emulator serial detected: $SERIAL"
           for i in $(seq 1 "$EMU_BOOT_TIMEOUT"); do
-            BOOTED=$(adb -s "$SERIAL" shell getprop sys.boot_completed 2>/dev/null | tr -d '')
-            STATE=$(adb -s "$SERIAL" get-state 2>/dev/null | tr -d '' || true)
+            BOOTED=$(adb -s "$SERIAL" shell getprop sys.boot_completed 2>/dev/null | tr -d '
+')
+            STATE=$(adb -s "$SERIAL" get-state 2>/dev/null | tr -d '
+' || true)
             if [ "$BOOTED" = "1" ] || [ "$STATE" = "device" ]; then
               break
             fi
