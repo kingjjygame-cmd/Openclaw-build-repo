@@ -304,6 +304,22 @@ export default function Home() {
     reader.readAsText(file);
   }
 
+
+  function quickCompleteMission(id: string) {
+    setMissions((prev) =>
+      prev.map((m) =>
+        m.id === id
+          ? {
+              ...m,
+              status: "완료" as MissionStatus,
+              progress: 100,
+              tasks: m.tasks.map((t) => ({ ...t, done: true })),
+            }
+          : m,
+      ),
+    );
+  }
+
   function restoreLatestSnapshot() {
     if (!snapshots.length) {
       setLastBackupMsg("복구할 스냅샷이 없습니다");
@@ -504,6 +520,9 @@ export default function Home() {
                   value={mission.progress}
                   onChange={(e) => saveMissionProgress(mission.id, Number(e.target.value))}
                 />
+                <button type="button" onClick={() => quickCompleteMission(mission.id)} className="ok">
+                  1클릭 완료
+                </button>
                 <button type="button" onClick={() => removeMission(mission.id)} className="danger">
                   삭제
                 </button>

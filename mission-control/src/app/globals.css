@@ -278,3 +278,7 @@ button:hover {
     flex-wrap: wrap;
   }
 }
+
+button.ok {
+  background: #1f6b4a;
+}
