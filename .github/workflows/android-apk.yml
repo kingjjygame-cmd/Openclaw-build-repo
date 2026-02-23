@@ -201,8 +201,7 @@ jobs:
 
           if ! timeout "$SDK_MANAGER_TIMEOUT" avdmanager list avd | grep -q "Name: ci-emulator"; then
             echo "[INFO] no existing AVD. creating ci-emulator"
-            printf 'no
-' | avdmanager create avd -n ci-emulator -k "system-images;android-34;google_apis;x86_64" -d "pixel_6" --force
+            printf 'no\n' | avdmanager create avd -n ci-emulator -k "system-images;android-34;google_apis;x86_64" -d "pixel_6" --force
           fi
 
           if ! avdmanager list avd | grep -q "Name: ci-emulator"; then
@@ -250,10 +249,8 @@ jobs:
 
           echo "[INFO] emulator serial detected: $SERIAL"
           for i in $(seq 1 "$EMU_BOOT_TIMEOUT"); do
-            BOOTED=$(adb -s "$SERIAL" shell getprop sys.boot_completed 2>/dev/null | tr -d '
-')
-            STATE=$(adb -s "$SERIAL" get-state 2>/dev/null | tr -d '
-' || true)
+            BOOTED=$(adb -s "$SERIAL" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')
+            STATE=$(adb -s "$SERIAL" get-state 2>/dev/null | tr -d '\r' || true)
             if [ "$BOOTED" = "1" ] || [ "$STATE" = "device" ]; then
               break
             fi
