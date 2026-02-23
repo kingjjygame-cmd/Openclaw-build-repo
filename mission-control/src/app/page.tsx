@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
 type MissionStatus = "진행중" | "완료" | "지연" | "대기";
 
@@ -19,7 +19,22 @@ type Mission = {
   progress: number;
 };
 
+type Snapshot = {
+  id: string;
+  savedAt: string;
+  label: string;
+  payload: string;
+};
+
+type PersistedState = {
+  missions: Mission[];
+  todayFocus: string;
+  focusLog: string;
+};
+
 const STORAGE_KEY = "mission-control:data:v1";
+const SNAPSHOT_KEY = "mission-control:snapshots:v1";
+const MAX_SNAPSHOTS = 14;
 
 const DEFAULT_MISSIONS: Mission[] = [
   {
@@ -88,10 +103,22 @@ function progressFromTasks(tasks: Task[]) {
   return Math.round((tasks.filter((x) => x.done).length / tasks.length) * 100);
 }
 
+function todayKey(now = new Date()) {
+  return now.toLocaleDateString("sv-SE");
+}
+
+function toPayload(state: PersistedState): string {
+  return JSON.stringify(state, null, 2);
+}
+
 export default function Home() {
   const [missions, setMissions] = useState<Mission[]>(DEFAULT_MISSIONS);
   const [todayFocus, setTodayFocus] = useState("");
   const [focusLog, setFocusLog] = useState("");
+  const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
+  const [lastBackupMsg, setLastBackupMsg] = useState<string>("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const [form, setForm] = useState({
     title: "",
     detail: "",
@@ -102,27 +129,59 @@ export default function Home() {
 
   useEffect(() => {
     const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return;
-    try {
-      const parsed = JSON.parse(raw) as {
-        missions: Mission[];
-        todayFocus: string;
-        focusLog: string;
-      };
-      if (Array.isArray(parsed.missions)) {
-        setMissions(parsed.missions);
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw) as PersistedState;
+        if (Array.isArray(parsed.missions)) {
+          setMissions(parsed.missions);
+        }
+        setTodayFocus(parsed.todayFocus || "");
+        setFocusLog(parsed.focusLog || "");
+      } catch {
+        // parse errors -> keep defaults
       }
-      setTodayFocus(parsed.todayFocus || "");
-      setFocusLog(parsed.focusLog || "");
-    } catch {
-      // ignore parse errors and keep defaults
+    }
+
+    const snap = window.localStorage.getItem(SNAPSHOT_KEY);
+    if (snap) {
+      try {
+        const parsed = JSON.parse(snap) as Snapshot[];
+        if (Array.isArray(parsed)) {
+          setSnapshots(parsed);
+        }
+      } catch {
+        // parse errors -> no snapshots
+      }
     }
   }, []);
 
+  const state: PersistedState = useMemo(
+    () => ({ missions, todayFocus, focusLog }),
+    [missions, todayFocus, focusLog],
+  );
+
   useEffect(() => {
-    const payload = { missions, todayFocus, focusLog };
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
-  }, [missions, todayFocus, focusLog]);
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  }, [state]);
+
+  useEffect(() => {
+    setSnapshots((prev) => {
+      const latest = prev[0]?.label || "";
+      const today = todayKey();
+
+      if (latest === today) return prev;
+
+      const newSnap: Snapshot = {
+        id: uid("s"),
+        savedAt: new Date().toISOString(),
+        label: today,
+        payload: toPayload(state),
+      };
+      const next = [newSnap, ...prev].slice(0, MAX_SNAPSHOTS);
+      window.localStorage.setItem(SNAPSHOT_KEY, JSON.stringify(next));
+      return next;
+    });
+  }, [state]);
 
   const summary = useMemo(() => {
     const total = missions.length;
@@ -191,9 +250,77 @@ export default function Home() {
   function resetStorage() {
     if (!window.confirm("로컬 저장 데이터를 초기화할까요?")) return;
     window.localStorage.removeItem(STORAGE_KEY);
+    window.localStorage.removeItem(SNAPSHOT_KEY);
     setMissions(DEFAULT_MISSIONS);
     setTodayFocus("");
     setFocusLog("");
+    setSnapshots([]);
+    setLastBackupMsg("초기화 완료");
+    window.setTimeout(() => setLastBackupMsg(""), 3000);
+  }
+
+  function handleBackupNow() {
+    const payload = toPayload(state);
+    const blob = new Blob([payload], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `mission-control-backup-${todayKey().replace(/-/g, "")}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+
+    const newSnap: Snapshot = {
+      id: uid("s"),
+      savedAt: new Date().toISOString(),
+      label: `수동 ${new Date().toLocaleString()}`,
+      payload,
+    };
+    setSnapshots((prev) => {
+      const next = [newSnap, ...prev].slice(0, MAX_SNAPSHOTS);
+      window.localStorage.setItem(SNAPSHOT_KEY, JSON.stringify(next));
+      return next;
+    });
+    setLastBackupMsg("백업 파일 저장 + 스냅샷 기록 완료");
+    window.setTimeout(() => setLastBackupMsg(""), 2000);
+  }
+
+  function handleRestore(file: File | null) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(String(reader.result)) as PersistedState;
+        if (!Array.isArray(parsed.missions)) throw new Error("형식 오류");
+        setMissions(parsed.missions);
+        setTodayFocus(parsed.todayFocus || "");
+        setFocusLog(parsed.focusLog || "");
+        setLastBackupMsg("복구 완료");
+      } catch {
+        setLastBackupMsg("복구 실패: 파일 형식이 맞지 않습니다");
+      } finally {
+        window.setTimeout(() => setLastBackupMsg(""), 2500);
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  function restoreLatestSnapshot() {
+    if (!snapshots.length) {
+      setLastBackupMsg("복구할 스냅샷이 없습니다");
+      window.setTimeout(() => setLastBackupMsg(""), 2000);
+      return;
+    }
+    try {
+      const payload = JSON.parse(snapshots[0].payload) as PersistedState;
+      if (!Array.isArray(payload.missions)) throw new Error("invalid");
+      setMissions(payload.missions);
+      setTodayFocus(payload.todayFocus || "");
+      setFocusLog(payload.focusLog || "");
+      setLastBackupMsg("최근 스냅샷으로 복구 완료");
+    } catch {
+      setLastBackupMsg("최근 스냅샷이 손상되어 복구할 수 없습니다");
+    }
+    window.setTimeout(() => setLastBackupMsg(""), 2500);
   }
 
   return (
@@ -215,7 +342,8 @@ export default function Home() {
         <article>
           <h2>알림</h2>
           <p>마감 임박/초과: {summary.overdue}개</p>
-          <p>데이터 보관: 브라우저 로컬스토리지</p>
+          <p>데이터 보관: 브라우저 localStorage</p>
+          {lastBackupMsg && <p className="muted">{lastBackupMsg}</p>}
         </article>
         <article>
           <h2>오늘 한 줄</h2>
@@ -229,6 +357,56 @@ export default function Home() {
           </button>
           {focusLog && <p className="muted">최근 메모: {focusLog}</p>}
         </article>
+      </section>
+
+      <section className="toolbar panel">
+        <div>
+          <h2>백업/복구</h2>
+          <p>오류 방지용으로 매일 1회 자동 스냅샷 + 수동 백업 파일 생성.</p>
+        </div>
+        <div className="toolbarActions">
+          <button type="button" onClick={handleBackupNow}>
+            현재 상태 백업(.json)
+          </button>
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="ghost"
+          >
+            백업 파일 복원
+          </button>
+          <button type="button" onClick={restoreLatestSnapshot} className="ghost">
+            최근 스냅샷 복원
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="application/json"
+            className="hiddenFile"
+            onChange={(e) => {
+              const f = e.target.files?.[0] || null;
+              handleRestore(f);
+              e.currentTarget.value = "";
+            }}
+          />
+          <button type="button" className="danger" onClick={resetStorage}>
+            로컬 데이터 초기화
+          </button>
+        </div>
+        <div className="snapshotList">
+          <h4>최근 스냅샷</h4>
+          {snapshots.length === 0 ? (
+            <p className="muted">없음 (최근 14일 자동 보관)</p>
+          ) : (
+            <ul>
+              {snapshots.slice(0, 5).map((s) => (
+                <li key={s.id}>
+                  <strong>{s.label}</strong> · {new Date(s.savedAt).toLocaleString()}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </section>
 
       <section className="panel">
@@ -334,12 +512,6 @@ export default function Home() {
           </article>
         ))}
       </section>
-
-      <div className="footerActions">
-        <button className="danger" onClick={resetStorage}>
-          로컬 데이터 초기화
-        </button>
-      </div>
     </main>
   );
 }
