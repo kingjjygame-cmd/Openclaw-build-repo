@@ -182,6 +182,10 @@ jobs:
         run: |
           set -euo pipefail
 
+          SDK_MANAGER_TIMEOUT=300
+          EMU_SERIAL_TIMEOUT=240
+          EMU_BOOT_TIMEOUT=360
+
           # ensure emulator binary available and stable AVD home
           sdkmanager --install "platform-tools" "platforms;android-34" "system-images;android-34;google_apis;x86_64" "emulator" >/tmp/sdk_install.log 2>&1 || true
           export PATH="$ANDROID_HOME/emulator:$ANDROID_HOME/platform-tools:$PATH"
@@ -189,11 +193,14 @@ jobs:
           export ANDROID_AVD_HOME="$ANDROID_SDK_HOME/avd"
           mkdir -p "$ANDROID_AVD_HOME" "$ANDROID_SDK_HOME"
           mkdir -p /tmp/adb_keys && chmod 700 /tmp/adb_keys
+
           adb kill-server || true
           adb start-server
 
-          if ! avdmanager list avd | grep -q "Name: ci-emulator"; then
-            echo "no" | avdmanager create avd -n ci-emulator -k "system-images;android-34;google_apis;x86_64" -d "pixel_6" --force
+          if ! timeout "$SDK_MANAGER_TIMEOUT" avdmanager list avd | grep -q "Name: ci-emulator"; then
+            echo "[INFO] no existing AVD. creating ci-emulator"
+            printf 'no
+' | avdmanager create avd -n ci-emulator -k "system-images;android-34;google_apis;x86_64" -d "pixel_6" --force
           fi
 
           if ! avdmanager list avd | grep -q "Name: ci-emulator"; then
@@ -202,11 +209,22 @@ jobs:
             exit 1
           fi
 
-          emulator -avd ci-emulator -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -no-snapshot -memory 2048 -cores 2 -no-accel >/tmp/emulator.log 2>&1 &
+          emulator -avd ci-emulator -no-window -no-audio -no-boot-anim -gpu off -no-snapshot -memory 2048 -cores 2 >/tmp/emulator.log 2>&1 &
           EMU_PID=$!
-          echo "started emulator pid=$EMU_PID"
+          echo "[INFO] started emulator pid=$EMU_PID"
 
-          for i in $(seq 1 240); do
+          for i in $(seq 1 10); do
+            if ps -p "$EMU_PID" > /dev/null 2>&1; then
+              echo "[INFO] emulator process alive"
+              break
+            fi
+            echo "[WARN] emulator process ended too early"
+            tail -n 200 /tmp/emulator.log || true
+            exit 1
+          done
+
+          # wait for adb emulator device serial
+          for i in $(seq 1 "$EMU_SERIAL_TIMEOUT"); do
             adb devices | awk 'NR>1 && /emulator/{print $1}' | head -n 1 >/tmp/emu_serial || true
             if [ -s /tmp/emu_serial ]; then
               break
@@ -220,15 +238,18 @@ jobs:
             adb devices
             echo "[ERROR] avd list:"
             avdmanager list avd || true
+            echo "[ERROR] emulator process:"
+            ps -fp "$EMU_PID" || true
             echo "[ERROR] emulator log tail:"
-            tail -n 120 /tmp/emulator.log || true
+            tail -n 240 /tmp/emulator.log || true
             adb kill-server || true
             exit 1
           fi
 
-          for i in $(seq 1 240); do
-            BOOTED=$(adb -s "$SERIAL" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')
-            STATE=$(adb -s "$SERIAL" get-state 2>/dev/null | tr -d '\r' || true)
+          echo "[INFO] emulator serial detected: $SERIAL"
+          for i in $(seq 1 "$EMU_BOOT_TIMEOUT"); do
+            BOOTED=$(adb -s "$SERIAL" shell getprop sys.boot_completed 2>/dev/null | tr -d '')
+            STATE=$(adb -s "$SERIAL" get-state 2>/dev/null | tr -d '' || true)
             if [ "$BOOTED" = "1" ] || [ "$STATE" = "device" ]; then
               break
             fi
@@ -236,8 +257,10 @@ jobs:
           done
           if [ "$BOOTED" != "1" ]; then
             echo "[ERROR] Emulator boot timeout"
-            adb -s "$SERIAL" shell getprop | tail -n 30 || true
-            tail -n 120 /tmp/emulator.log || true
+            echo "[ERROR] adb devices output:"
+            adb devices
+            adb -s "$SERIAL" shell getprop sys.boot_completed 2>/dev/null || true
+            tail -n 240 /tmp/emulator.log || true
             adb kill-server || true
             exit 1
           fi
@@ -250,14 +273,16 @@ jobs:
             exit 1
           fi
 
-          # launch app (explicit component preferred, fallback to monkey)
+          # launch app
           TARGET="${{ steps.apk_meta.outputs.app_id }}/${{ steps.apk_meta.outputs.launch_activity }}"
-          adb -s "$SERIAL" shell monkey -p "${{ steps.apk_meta.outputs.app_id }}" -c android.intent.category.LAUNCHER 1 > /tmp/launch.log 2>&1 || true
           if ! adb -s "$SERIAL" shell am start -n "$TARGET" > /tmp/launch.log 2>&1; then
-            echo "[ERROR] app launch failed"
-            cat /tmp/launch.log
-            adb kill-server || true
-            exit 1
+            adb -s "$SERIAL" shell monkey -p "${{ steps.apk_meta.outputs.app_id }}" -c android.intent.category.LAUNCHER 1 > /tmp/launch.log 2>&1 || true
+            if [ $? -ne 0 ]; then
+              echo "[ERROR] app launch failed"
+              cat /tmp/launch.log
+              adb kill-server || true
+              exit 1
+            fi
           fi
 
           # verify app process appears
