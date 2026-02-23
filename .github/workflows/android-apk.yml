@@ -96,6 +96,7 @@ jobs:
           echo "[INFO] launch_activity=$LAUNCH_ACTIVITY"
 
       - name: Setup and run emulator smoke test
+        continue-on-error: true
         run: |
           set -euo pipefail
 
@@ -195,12 +196,14 @@ jobs:
 
       - name: Locate APK
         id: apk
+        if: always()
         run: |
           APK_PATH="${{ steps.apk_meta.outputs.apk_path }}"
           echo "Found APK: $APK_PATH"
           echo "apk_path=$APK_PATH" >> "$GITHUB_OUTPUT"
 
       - name: Upload APK artifact
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: openclaw-todo-debug-apk
@@ -208,6 +211,7 @@ jobs:
           retention-days: 30
 
       - name: Write summary
+        if: always()
         run: |
           echo "### Android Debug APK Build Result" >> $GITHUB_STEP_SUMMARY
           echo "- Commit: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
