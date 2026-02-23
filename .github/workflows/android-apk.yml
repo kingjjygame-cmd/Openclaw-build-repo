@@ -337,25 +337,28 @@ jobs:
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.send_email == 'true'
         id: smtp_check
         run: |
+          TARGET_EMAIL="${{ github.event.inputs.target_email }}"
           SMTP_HOST="${{ secrets.SMTP_HOST }}"
-          SMTP_PORT="${{ secrets.SMTP_PORT }}"
           SMTP_USER="${{ secrets.SMTP_USER }}"
           SMTP_PASSWORD="${{ secrets.SMTP_PASSWORD }}"
           SMTP_FROM="${{ secrets.SMTP_FROM }}"
           RESOLVED_FROM="${SMTP_FROM:-$SMTP_USER}"
 
-          if [ -z "$SMTP_HOST" ] || [ -z "$SMTP_USER" ] || [ -z "$SMTP_PASSWORD" ] || [ -z "$RESOLVED_FROM" ]; then
+          if [ -z "$TARGET_EMAIL" ]; then
             echo "missing=true" >> "$GITHUB_OUTPUT"
-            echo "SMTP config missing/invalid: require SMTP_HOST, SMTP_USER, SMTP_PASSWORD, and RESOLVED FROM (SMTP_FROM or SMTP_USER)." >> "$GITHUB_STEP_SUMMARY"
+            echo "::warning::target_email input is empty. Set target_email when dispatching." 
+          elif [ -z "$SMTP_HOST" ] || [ -z "$SMTP_USER" ] || [ -z "$SMTP_PASSWORD" ] || [ -z "$RESOLVED_FROM" ]; then
+            echo "missing=true" >> "$GITHUB_OUTPUT"
+            echo "SMTP config invalid/missing: require SMTP_HOST, SMTP_USER, SMTP_PASSWORD, and SMTP_FROM(or SMTP_USER)." >> "$GITHUB_STEP_SUMMARY"
             echo "::warning::SMTP secret missing or invalid. Cannot send email until set." 
           else
             echo "missing=false" >> "$GITHUB_OUTPUT"
+            echo "ready=true" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Send APK download note by email
         id: send_mail
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.send_email == 'true' && steps.smtp_check.outputs.missing != 'true'
-        continue-on-error: true
         uses: dawidd6/action-send-mail@v6
         with:
           server_address: ${{ secrets.SMTP_HOST }}
@@ -375,17 +378,28 @@ jobs:
             <p>실행회차: ${{ github.run_number }}</p>
           convert_markdown: true
 
-      - name: Report email delivery status
+      - name: Require email delivery when requested
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.send_email == 'true'
         run: |
           if [ "${{ steps.smtp_check.outputs.missing }}" = "true" ]; then
-            echo "- Mail delivery skipped: SMTP secrets missing or incomplete (SMTP_HOST / SMTP_USER / SMTP_PASSWORD / SMTP_FROM)." >> "$GITHUB_STEP_SUMMARY"
-            echo "[WARN] Mail delivery skipped due missing SMTP config."
-          elif [ "${{ steps.send_mail.outcome }}" = "success" ]; then
-            echo "- Mail delivery: action reported success." >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::Email was requested but required SMTP/recipient settings are missing. Please set SMTP_HOST, SMTP_USER, SMTP_PASSWORD and target_email." 
+            exit 1
+          fi
+
+          if [ "${{ steps.send_mail.outcome }}" != "success" ]; then
+            echo "::error::Email action did not succeed (outcome=${{ steps.send_mail.outcome }}). Check SMTP credentials and server settings in repository secrets."
+            exit 1
+          fi
+
+      - name: Report email delivery status
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.send_email == 'true'
+        run: |
+          if [ "${{ steps.send_mail.outcome }}" = "success" ]; then
+            echo "- Mail delivery: success." >> "$GITHUB_STEP_SUMMARY"
+          elif [ "${{ steps.smtp_check.outputs.missing }}" = "true" ]; then
+            echo "- Mail delivery: skipped due missing config/recipient." >> "$GITHUB_STEP_SUMMARY"
           else
-            echo "- Mail delivery: action outcome=${{ steps.send_mail.outcome }} (check logs for SMTP auth/delivery error)." >> "$GITHUB_STEP_SUMMARY"
-            echo "[WARN] Mail delivery did not report success." 
+            echo "- Mail delivery: failed (outcome=${{ steps.send_mail.outcome }})." >> "$GITHUB_STEP_SUMMARY"
           fi
 
       - name: Notify success (telegram)
