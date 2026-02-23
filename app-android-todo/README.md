@@ -115,3 +115,5 @@ TARGET_EMAIL="본인주소" ./scripts/build-then-mail-android.sh
 - Google/카카오 로그인
 - Play Store 업로드용 AAB
 # workflow validation
+
+# cicd-manual-trigger-marker: 2026-02-23T09:52:00Z
