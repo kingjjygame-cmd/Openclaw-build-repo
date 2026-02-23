@@ -356,11 +356,15 @@ jobs:
           convert_markdown: true
 
       - name: Notify success (telegram)
-        if: github.event_name == 'workflow_dispatch' && github.event.inputs.send_email == 'true' && success() && secrets.TELEGRAM_BOT_TOKEN != '' && secrets.TELEGRAM_CHAT_ID != ''
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.send_email == 'true' && success()
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
+          if [ -z "$TELEGRAM_BOT_TOKEN" ] || [ -z "$TELEGRAM_CHAT_ID" ]; then
+            echo "[WARN] Telegram secrets missing; skip success notification"
+            exit 0
+          fi
           MESSAGE="[CI] ✅ APK 빌드 완료. Run #${{ github.run_number }} / Run ID: ${{ github.run_id }} / Artifact: openclaw-todo-debug-apk"
           MESSAGE="${MESSAGE}\n빌드: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
