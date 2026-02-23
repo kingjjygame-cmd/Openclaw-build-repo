@@ -333,8 +333,18 @@ jobs:
           echo "- App ID: ${{ steps.apk_meta.outputs.app_id }}" >> $GITHUB_STEP_SUMMARY
           echo "- Launch activity: ${{ steps.apk_meta.outputs.launch_activity }}" >> $GITHUB_STEP_SUMMARY
 
+      - name: Progress check interval gate (every 10 runs)
+        id: notify_gate
+        run: |
+          RUN_NUMBER="${{ github.run_number }}"
+          if [ $((RUN_NUMBER % 10)) -eq 0 ] || [ "$RUN_NUMBER" = "10" ]; then
+            echo "notify=1" >> "$GITHUB_OUTPUT"
+          else
+            echo "notify=0" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Send APK download note by email
-        if: github.event_name == 'workflow_dispatch' && github.event.inputs.send_email == 'true'
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.send_email == 'true' && steps.notify_gate.outputs.notify == '1'
         uses: dawidd6/action-send-mail@v6
         with:
           server_address: ${{ secrets.SMTP_HOST }}
@@ -343,7 +353,7 @@ jobs:
           password: ${{ secrets.SMTP_PASSWORD }}
           from: ${{ secrets.SMTP_USER }}
           to: ${{ github.event.inputs.target_email }}
-          subject: "[OpenClaw Todo] GitHub Actions APK 빌드 완료"
+          subject: "[OpenClaw Todo] GitHub Actions APK 빌드 완료 (#${{ github.run_number }})"
           html_body: |
             <h3>OpenClaw Android APK 빌드 완료</h3>
             <p>커밋: ${{ github.sha }}</p>
@@ -351,4 +361,5 @@ jobs:
             <p>Artifacts: openclaw-todo-debug-apk (Actions > 해당 런에서 다운로드)</p>
             <p>앱 ID: ${{ steps.apk_meta.outputs.app_id }}</p>
             <p>Launch Activity: ${{ steps.apk_meta.outputs.launch_activity }}</p>
+            <p>실행회차: ${{ github.run_number }}</p>
           convert_markdown: true
