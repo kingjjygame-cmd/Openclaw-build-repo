@@ -98,7 +98,7 @@ jobs:
           set -euo pipefail
 
           # ensure emulator binary available and stable AVD home
-          sdkmanager --install "platform-tools" "platforms;android-34" "system-images;android-34;google_apis;arm64-v8a" "emulator" >/tmp/sdk_install.log 2>&1 || true
+          sdkmanager --install "platform-tools" "platforms;android-34" "system-images;android-34;google_apis;x86_64" "emulator" >/tmp/sdk_install.log 2>&1 || true
           export PATH="$ANDROID_HOME/emulator:$ANDROID_HOME/platform-tools:$PATH"
           export ANDROID_SDK_HOME="/tmp/.android"
           export ANDROID_AVD_HOME="$ANDROID_SDK_HOME/avd"
@@ -108,7 +108,7 @@ jobs:
           adb start-server
 
           if ! avdmanager list avd | grep -q "Name: ci-emulator"; then
-            echo "no" | avdmanager create avd -n ci-emulator -k "system-images;android-34;google_apis;arm64-v8a" -d "pixel_6" --force
+            echo "no" | avdmanager create avd -n ci-emulator -k "system-images;android-34;google_apis;x86_64" -d "pixel_6" --force
           fi
 
           if ! avdmanager list avd | grep -q "Name: ci-emulator"; then
@@ -121,7 +121,7 @@ jobs:
           EMU_PID=$!
           echo "started emulator pid=$EMU_PID"
 
-          for i in $(seq 1 180); do
+          for i in $(seq 1 240); do
             adb devices | awk 'NR>1 && /emulator/{print $1}' | head -n 1 >/tmp/emu_serial || true
             if [ -s /tmp/emu_serial ]; then
               break
@@ -141,7 +141,7 @@ jobs:
             exit 1
           fi
 
-          for i in $(seq 1 180); do
+          for i in $(seq 1 240); do
             BOOTED=$(adb -s "$SERIAL" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')
             STATE=$(adb -s "$SERIAL" get-state 2>/dev/null | tr -d '\r' || true)
             if [ "$BOOTED" = "1" ] || [ "$STATE" = "device" ]; then
