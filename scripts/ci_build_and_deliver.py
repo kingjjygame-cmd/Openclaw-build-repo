@@ -11,7 +11,6 @@
 import json
 import os
 import ssl
-import sys
 import subprocess
 import time
 import zipfile
@@ -21,6 +20,26 @@ import atexit
 import errno
 
 LOCK_PATH = os.environ.get("CI_PIPELINE_LOCK_PATH", "/tmp/openclaw_ci_build.lock")
+
+def _lock_owner_alive():
+    try:
+        with open(LOCK_PATH, 'r') as f:
+            pid_line = f.read().strip()
+        if not pid_line:
+            return None
+        pid = int(pid_line)
+    except Exception:
+        return None
+
+    try:
+        os.kill(pid, 0)
+        return pid
+    except ProcessLookupError:
+        return None
+    except Exception:
+        return None
+
+
 from datetime import datetime
 from typing import Dict, Optional
 from urllib.parse import quote_plus
@@ -72,8 +91,18 @@ def acquire_lock():
         fd = os.open(LOCK_PATH, flags, 0o600)
     except OSError as e:
         if e.errno == errno.EEXIST:
-            raise RuntimeError(f"pipeline lock exists ({LOCK_PATH}). another pipeline process may be running")
-        raise
+            stale_pid = _lock_owner_alive()
+            if stale_pid is None:
+                # stale lock, remove and retry once
+                try:
+                    os.unlink(LOCK_PATH)
+                except FileNotFoundError:
+                    pass
+                fd = os.open(LOCK_PATH, flags, 0o600)
+            else:
+                raise RuntimeError(f"pipeline lock exists ({LOCK_PATH}). another pipeline process may be running")
+        else:
+            raise
 
     with os.fdopen(fd, 'w') as f:
         f.write(f"{os.getpid()}\n")
