@@ -2,6 +2,7 @@
 set -euo pipefail
 
 : "${TARGET_EMAIL:=kingjjy.game@gmail.com}"
+: "${GOG_ACCOUNT:=$TARGET_EMAIL}"
 : "${BUILD_PROFILE:=preview}"
 : "${PLATFORM:=android}"
 : "${PROJECT_DIR:=/home/kingjjy_game/.openclaw/workspace/app-android-todo}"
@@ -105,12 +106,14 @@ if [[ -n "$APK_PATH" && -f "$APK_PATH" ]]; then
   log "[5/5] Sending APK attached to $TARGET_EMAIL"
   BODY=$'안드로이드 테스트 APK가 빌드 완료되어 첨부합니다.\n\n빌드ID: '
   BODY+="$BUILD_ID\n빌드 페이지: $BUILD_PAGE"
-  GOG_KEYRING_PASSWORD="moka" gog send -a kingjjy.game@gmail.com --to="$TARGET_EMAIL" --subject="[Android Test] OpenClaw Todo APK 완료" --body "$BODY" --attach="$APK_PATH" --force
+  GOG_KEYRING_PASSWORD="${GOG_KEYRING_PASSWORD:-}" \
+    gog gmail send --account "$GOG_ACCOUNT" --to="$TARGET_EMAIL" --subject="[Android Test] OpenClaw Todo APK 완료" --body "$BODY" --attach="$APK_PATH" --force
 else
   log "[5/5] Sending completion notice only"
   BODY=$'안드로이드 테스트 빌드가 완료되었습니다.\n\n빌드ID: '
   BODY+="$BUILD_ID\n빌드 페이지: $BUILD_PAGE\n\napk 직접 첨부 링크를 아래에서 받으실 수 있습니다."
-  GOG_KEYRING_PASSWORD="moka" gog send -a kingjjy.game@gmail.com --to="$TARGET_EMAIL" --subject="[Android Test] OpenClaw Todo 빌드 완료" --body "$BODY" --force
+  GOG_KEYRING_PASSWORD="${GOG_KEYRING_PASSWORD:-}" \
+    gog gmail send --account "$GOG_ACCOUNT" --to="$TARGET_EMAIL" --subject="[Android Test] OpenClaw Todo 빌드 완료" --body "$BODY" --force
 fi
 
 log "Done"
