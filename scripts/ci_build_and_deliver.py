@@ -250,13 +250,48 @@ def ensure_smoke_pass(owner_repo: str, run_id: int, token: str):
             raise RuntimeError(f"smoke test step not passing: {step_name} => {concl}")
 
 
-def fetch_artifact(owner_repo: str, run_id: int, token: str, dst_zip: str = "/tmp/openclaw-apk-artifact.zip"):
+
+def find_artifact(owner_repo: str, run_id: int, token: str):
+    """Return target artifact metadata by expected artifact name."""
     artifacts = _get_json(f"{GITHUB_API}/repos/{owner_repo}/actions/runs/{run_id}/artifacts", token).get("artifacts", [])
-    target = None
     for a in artifacts:
         if a.get("name") == "openclaw-todo-debug-apk":
-            target = a
-            break
+            return a
+    return artifacts[0] if artifacts else None
+
+
+def resolve_artifact_download_url(artifact: dict, token: str) -> str:
+    """Return final blob URL (or best-effort API URL)."""
+    if not artifact:
+        return ""
+    base_url = artifact.get("archive_download_url")
+    if not base_url:
+        return ""
+
+    req = Request(base_url, headers=_headers(token))
+    try:
+        with urlopen(req, context=ssl._create_unverified_context(), timeout=30) as r:
+            return getattr(r, "url", base_url)
+    except Exception as e:
+        loc = None
+        if hasattr(e, "headers"):
+            loc = e.headers.get("Location")
+        return loc or base_url
+
+
+def artifact_links(owner_repo: str, run: dict, artifact: dict, run_id: int, token: str):
+    suite_id = run.get("check_suite_id")
+    artifact_page = ""
+    if suite_id and artifact:
+        artifact_page = f"https://github.com/{owner_repo}/suites/{suite_id}/artifacts/{artifact.get('id')}"
+
+    api_url = artifact.get("archive_download_url") if artifact else ""
+    direct_url = resolve_artifact_download_url(artifact, token) if artifact else ""
+    name = artifact.get("name") if artifact else "openclaw-todo-debug-apk"
+    return artifact_page, api_url, direct_url, name
+
+def fetch_artifact(owner_repo: str, run_id: int, token: str, dst_zip: str = "/tmp/openclaw-apk-artifact.zip"):
+    target = find_artifact(owner_repo, run_id, token)
     if not target:
         raise RuntimeError("artifact not found")
 
@@ -481,6 +516,7 @@ def main():
     ref = os.environ.get("GITHUB_REF", "master")
     to_addr = os.environ.get("DELIVERY_EMAIL", "kingjjy.game@gmail.com")
     gog_account = os.environ.get("GOG_ACCOUNT", to_addr)
+    send_mail = os.environ.get("SEND_MAIL", "0").lower() in ("1", "true", "yes", "y")
 
     retry_count = 0
     print("[ci] start delivery loop: failure retry + delivery validation")
@@ -509,13 +545,32 @@ def main():
 
             ensure_smoke_pass(owner_repo, run_id, token)
             zip_path = fetch_artifact(owner_repo, run_id, token)
+            artifact = find_artifact(owner_repo, run_id, token)
             apk_path = extract_apk(zip_path)
             validate_apk(apk_path)
             local_install_verify(apk_path)
 
-            send_mail_with_gog(apk_path, run_url, to_addr, gog_account)
-            msg = f"✅ 앱 빌드 완료\\nRun: {run_url}\\nAPK: openclaw-todo-debug-apk\\n수신: {to_addr}"
-            send_telegram(msg)
+            artifact = find_artifact(owner_repo, run_id, token)
+            artifact_page, artifact_api, artifact_direct, artifact_name = artifact_links(owner_repo, run, artifact, run_id, token)
+
+            if send_mail:
+                send_mail_with_gog(apk_path, run_url, to_addr, gog_account)
+                print(f"[ci] mail sent to {to_addr}")
+            else:
+                print("[ci] mail notification disabled by env")
+
+            msg_lines = [
+                f"✅ 앱 빌드 완료 (Run: {run_url})",
+                f"APK: {artifact_name}",
+                f"APK 크기: {os.path.getsize(apk_path)} bytes",
+            ]
+            if artifact_page:
+                msg_lines.append(f"브라우저 링크: {artifact_page}")
+            if artifact_direct:
+                msg_lines.append(f"직접 다운로드(권장): {artifact_direct}")
+            elif artifact_api:
+                msg_lines.append(f"API 다운로드 링크: {artifact_api}")
+            send_telegram("\n".join(msg_lines))
 
             print(f"[ci] complete: {run_url}")
             print(f"[ci] success after {retry_count + 1} run")

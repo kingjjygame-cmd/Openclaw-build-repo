@@ -7,14 +7,19 @@ if [ -f "$WORKDIR/.delivery.env" ]; then
   source "$WORKDIR/.delivery.env"
 fi
 
-
 : "${GITHUB_REPO:=kingjjygame-cmd/Openclaw-build-repo}"
 : "${GITHUB_REF:=master}"
 : "${DELIVERY_EMAIL:=kingjjy.game@gmail.com}"
+: "${ONE_SHOT:=0}"
+: "${MAX_RETRIES:=0}"
+: "${SEND_MAIL:=0}"
 
 export GITHUB_REPO
 export GITHUB_REF
 export DELIVERY_EMAIL
+export ONE_SHOT
+export MAX_RETRIES
+export SEND_MAIL
 
 echo "[pipeline] delivery env check"
 python3 /home/kingjjy_game/.openclaw/workspace/scripts/check_delivery_env.py
