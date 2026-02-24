@@ -6,15 +6,6 @@ concurrency:
 
 on:
   workflow_dispatch:
-    inputs:
-      send_email:
-        description: 'Send APK download link by email after build'
-        required: false
-        default: 'false'
-      target_email:
-        description: 'Recipient email'
-        required: false
-        default: 'kingjjy.game@gmail.com'
   push:
     branches: ["master"]
     paths:
@@ -314,9 +305,8 @@ jobs:
           echo "Found APK: $APK_PATH"
           echo "apk_path=$APK_PATH" >> "$GITHUB_OUTPUT"
 
-      - name: Validate APK file for delivery
-        id: apk_for_mail
-        if: github.event_name == 'workflow_dispatch' && github.event.inputs.send_email == 'true'
+      - name: Validate APK for handoff
+        if: always()
         run: |
           APK_PATH="${{ steps.apk.outputs.apk_path }}"
           if [ -z "$APK_PATH" ]; then
@@ -332,7 +322,7 @@ jobs:
             echo "::error::APK file is empty: $APK_PATH"
             exit 1
           fi
-          echo "- APK for mail: $APK_PATH (${FILE_SIZE} bytes)" >> "$GITHUB_STEP_SUMMARY"
+          echo "- APK size: ${FILE_SIZE} bytes" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload APK artifact
         if: always()
@@ -352,154 +342,3 @@ jobs:
           echo "- APK path: ${{ steps.apk.outputs.apk_path }}" >> $GITHUB_STEP_SUMMARY
           echo "- App ID: ${{ steps.apk_meta.outputs.app_id }}" >> $GITHUB_STEP_SUMMARY
           echo "- Launch activity: ${{ steps.apk_meta.outputs.launch_activity }}" >> $GITHUB_STEP_SUMMARY
-
-      - name: Validate SMTP config for mail
-        if: github.event_name == 'workflow_dispatch' && github.event.inputs.send_email == 'true'
-        id: smtp_check
-        run: |
-          TARGET_EMAIL="${{ github.event.inputs.target_email }}"
-          SMTP_HOST="${{ secrets.SMTP_HOST }}"
-          SMTP_USER="${{ secrets.SMTP_USER }}"
-          SMTP_PASSWORD="${{ secrets.SMTP_PASSWORD }}"
-          SMTP_FROM="${{ secrets.SMTP_FROM }}"
-          RESOLVED_FROM="${SMTP_FROM:-$SMTP_USER}"
-          echo "TARGET_EMAIL=$TARGET_EMAIL" >> "$GITHUB_ENV"
-
-          if [ -z "$TARGET_EMAIL" ]; then
-            TARGET_EMAIL="kingjjy.game@gmail.com"
-            echo "using_default_target=true" >> "$GITHUB_OUTPUT"
-            echo "[INFO] target_email was empty, fallback to kingjjy.game@gmail.com" >> "$GITHUB_STEP_SUMMARY"
-          fi
-
-          if [ -z "$SMTP_HOST" ] || [ -z "$SMTP_USER" ] || [ -z "$SMTP_PASSWORD" ] || [ -z "$RESOLVED_FROM" ]; then
-            echo "missing=true" >> "$GITHUB_OUTPUT"
-            echo "SMTP config invalid/missing: require SMTP_HOST, SMTP_USER, SMTP_PASSWORD, and SMTP_FROM(or SMTP_USER)." >> "$GITHUB_STEP_SUMMARY"
-            echo "::warning::SMTP secret missing or invalid. Cannot send email until set." 
-          else
-            echo "missing=false" >> "$GITHUB_OUTPUT"
-            echo "ready=true" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Send APK download note by email
-        id: send_mail
-        if: github.event_name == 'workflow_dispatch' && github.event.inputs.send_email == 'true' && steps.smtp_check.outputs.missing != 'true'
-        uses: dawidd6/action-send-mail@v6
-        with:
-          server_address: ${{ secrets.SMTP_HOST }}
-          server_port: ${{ secrets.SMTP_PORT || '465' }}
-          username: ${{ secrets.SMTP_USER }}
-          password: ${{ secrets.SMTP_PASSWORD }}
-          from: ${{ secrets.SMTP_FROM || secrets.SMTP_USER }}
-          to: ${{ env.TARGET_EMAIL }}
-          attachments: ${{ steps.apk.outputs.apk_path }}
-          subject: "[OpenClaw Todo] GitHub Actions APK 빌드 완료 (#${{ github.run_number }})"
-          html_body: |
-            <h3>OpenClaw Android APK 빌드 완료</h3>
-            <p>커밋: ${{ github.sha }}</p>
-            <p>빌드 페이지: <a href='${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}'>열기</a></p>
-            <p>Artifacts: openclaw-todo-debug-apk (Actions > 해당 런에서 다운로드)</p>
-            <p>앱 ID: ${{ steps.apk_meta.outputs.app_id }}</p>
-            <p>Launch Activity: ${{ steps.apk_meta.outputs.launch_activity }}</p>
-            <p>실행회차: ${{ github.run_number }}</p>
-          convert_markdown: true
-
-      - name: Require email delivery when requested
-        if: github.event_name == 'workflow_dispatch' && github.event.inputs.send_email == 'true'
-        run: |
-          if [ "${{ steps.smtp_check.outputs.missing }}" = "true" ]; then
-            echo "::error::Email was requested but required SMTP/recipient settings are missing. Please set SMTP_HOST, SMTP_USER, SMTP_PASSWORD and target_email." 
-            exit 1
-          fi
-
-          if [ "${{ steps.send_mail.outcome }}" != "success" ]; then
-            echo "::error::Email action did not succeed (outcome=${{ steps.send_mail.outcome }}). Check SMTP credentials and server settings in repository secrets."
-            exit 1
-          fi
-
-      - name: Report email delivery status
-        if: github.event_name == 'workflow_dispatch' && github.event.inputs.send_email == 'true'
-        run: |
-          if [ "${{ steps.send_mail.outcome }}" = "success" ]; then
-            echo "- Mail delivery: success." >> "$GITHUB_STEP_SUMMARY"
-          elif [ "${{ steps.smtp_check.outputs.missing }}" = "true" ]; then
-            echo "- Mail delivery: skipped due missing config/recipient." >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "- Mail delivery: failed (outcome=${{ steps.send_mail.outcome }})." >> "$GITHUB_STEP_SUMMARY"
-          fi
-
-      - name: Notify success (telegram)
-        if: github.event_name == 'workflow_dispatch' && github.event.inputs.send_email == 'true' && success()
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: |
-          if [ -z "$TELEGRAM_BOT_TOKEN" ] || [ -z "$TELEGRAM_CHAT_ID" ]; then
-            echo "[WARN] Telegram secrets missing; skip success notification"
-            exit 0
-          fi
-          MESSAGE="[CI] ✅ APK 빌드 완료. Run #${{ github.run_number }} / Run ID: ${{ github.run_id }} / Artifact: openclaw-todo-debug-apk"
-          MESSAGE="${MESSAGE}\n빌드: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
-            -d chat_id="${TELEGRAM_CHAT_ID}" \
-            -d text="$MESSAGE" \
-            -d disable_web_page_preview=true || true
-
-      - name: Check failure streak every 10 (for user telegram alert)
-        id: fail_streak
-        if: failure() || cancelled()
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          python3 - <<'PY'
-            import json
-            import urllib.request
-            import os
-
-            run_id = int("${{ github.run_id }}")
-            repo = "${{ github.repository }}"
-            branch = "${{ github.ref_name }}"
-            output_file = os.environ['GITHUB_OUTPUT']
-            url = f"https://api.github.com/repos/{repo}/actions/workflows/android-apk.yml/runs?per_page=30"
-            req = urllib.request.Request(
-                url,
-                headers={
-                    'Accept': 'application/vnd.github+json',
-                    'Authorization': f"Bearer {os.environ['GH_TOKEN']}",
-                    'User-Agent': 'openclaw'
-                }
-            )
-
-            with urllib.request.urlopen(req) as res:
-                data = json.load(res)
-
-            streak = 1  # current failed run
-            for run in data.get('workflow_runs', []):
-                if run['id'] == run_id:
-                    continue
-                if run.get('head_branch') != branch:
-                    continue
-                conclusion = run.get('conclusion')
-                if conclusion == 'failure' or conclusion == 'timed_out':
-                    streak += 1
-                    continue
-                break
-
-            with open(output_file, 'a', encoding='utf-8') as f:
-                f.write(f"streak={streak}\n")
-                f.write(f"notify={'1' if streak % 10 == 0 else '0'}\n")
-            PY
-      - name: Notify keepalive on persistent failure (telegram)
-        if: steps.fail_streak.outputs.notify == '1' && always()
-        run: |
-          MESSAGE="[CI] Android APK Build failing for ${{ steps.fail_streak.outputs.streak }} runs continuously. Latest: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          if [ -n "${{ secrets.TELEGRAM_BOT_TOKEN }}" ] && [ -n "${{ secrets.TELEGRAM_CHAT_ID }}" ]; then
-            curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
-              -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
-              -d text="$MESSAGE" \
-              -d disable_web_page_preview=true || true
-          else
-            echo "[WARN] Telegram secrets not set. Cannot send keep-alive message for failed run streak."
-          fi
-          echo "### Continuous failure alert" >> $GITHUB_STEP_SUMMARY
-          echo "- streak: ${{ steps.fail_streak.outputs.streak }}" >> $GITHUB_STEP_SUMMARY
-          echo "- run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" >> $GITHUB_STEP_SUMMARY
