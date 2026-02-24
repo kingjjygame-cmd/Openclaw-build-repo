@@ -1,59 +1,57 @@
 #!/usr/bin/env python3
-"""Quick preflight checker for OpenClaw APK delivery loop."""
+"""Quick preflight checker for OpenClaw APK delivery loop (Gmail via gog CLI)."""
 
 import os
-import smtplib
-import ssl
+import shutil
+import subprocess
 
-REQUIRED = ["GITHUB_TOKEN", "SMTP_HOST", "SMTP_USER", "SMTP_PASSWORD"]
-
-
-def check(name, cond):
-    return (name, bool(cond))
+REQUIRED = ["GITHUB_TOKEN", "GOG_ACCOUNT", "GOG_KEYRING_PASSWORD"]
 
 
 def main():
     print("[check] environment readiness")
     status = {name: bool(os.environ.get(name)) for name in REQUIRED}
+
     for k, ok in status.items():
-        if k == "SMTP_PASSWORD":
+        if k == "GOG_KEYRING_PASSWORD":
             print(f"- {k}: {'(set)' if ok else 'MISSING'}")
         else:
             print(f"- {k}: {os.environ.get(k) if ok else 'MISSING'}")
 
-    if not status["SMTP_HOST"]:
-        os.environ["SMTP_HOST"] = "smtp.gmail.com"
-        status["SMTP_HOST"] = True
-        print("  -> defaulted SMTP_HOST to smtp.gmail.com")
-
     if not status["GITHUB_TOKEN"]:
         print("[FATAL] GITHUB_TOKEN missing")
-    if not status["SMTP_USER"] or not status["SMTP_PASSWORD"]:
-        print("[FATAL] SMTP_USER/SMTP_PASSWORD missing")
+    if not status["GOG_ACCOUNT"]:
+        print("[FATAL] GOG_ACCOUNT missing")
+    if not status["GOG_KEYRING_PASSWORD"]:
+        print("[WARN] GOG_KEYRING_PASSWORD not set; keyring access may fail in non-interactive mode")
 
-    if not all([status["GITHUB_TOKEN"], status["SMTP_USER"], status["SMTP_PASSWORD"]]):
+    if not all([status["GITHUB_TOKEN"], status["GOG_ACCOUNT"]]):
         return 1
 
-    smtp_host = os.environ["SMTP_HOST"]
-    smtp_port = int(os.environ.get("SMTP_PORT", "465"))
-    smtp_user = os.environ["SMTP_USER"]
-    smtp_pw = os.environ["SMTP_PASSWORD"]
+    if not shutil.which("gog"):
+        print("[FATAL] 'gog' CLI not found in PATH")
+        return 1
 
-    print(f"[check] testing SMTP connect {smtp_host}:{smtp_port} user={smtp_user}")
-    try:
-        if smtp_port == 465:
-            with smtplib.SMTP_SSL(smtp_host, smtp_port, context=ssl.create_default_context()) as s:
-                s.login(smtp_user, smtp_pw)
-        else:
-            with smtplib.SMTP(smtp_host, smtp_port) as s:
-                s.starttls(context=ssl.create_default_context())
-                s.login(smtp_user, smtp_pw)
-        print("[OK] SMTP auth works")
-    except Exception as e:
-        print(f"[ERROR] SMTP auth failed: {e}")
+    account = os.environ["GOG_ACCOUNT"]
+    cmd = [
+        "gog",
+        "auth",
+        "list",
+        "--json",
+        "--check",
+        "--no-input",
+        f"--account={account}",
+    ]
+    print(f"[check] testing gog token for {account}")
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+    if proc.returncode != 0:
+        print(f"[ERROR] gog auth check failed: rc={proc.returncode}")
+        print(proc.stdout.strip())
+        print(proc.stderr.strip())
+        print("Set GOG_KEYRING_PASSWORD and retry.")
         return 2
 
-    print("[OK] delivery environment is ready")
+    print("[OK] Gmail delivery environment looks ready")
     return 0
 
 
