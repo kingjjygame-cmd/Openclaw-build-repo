@@ -378,7 +378,24 @@ def local_install_verify(apk_path: str):
         print("[ci] adb 미설치: 설치 검증(install/launch) 스킵")
         return
 
-    pkg = os.environ.get("APK_PACKAGE", "com.moka.openclawtodo")
+    # apk에서 패키지명 추정 (aapt 존재 시): 로컬/메일 설치 대상과 동기화
+    pkg = os.environ.get("APK_PACKAGE", "")
+    aapt = _find_android_sdk_tool("aapt") or _find_android_sdk_tool("aapt2")
+    if not pkg and aapt:
+        try:
+            proc = subprocess.run([aapt, "dump", "badging", apk_path], capture_output=True, text=True)
+            for line in proc.stdout.splitlines():
+                if line.startswith("package:") and "name='" in line:
+                    # package: name='com.example' versionCode='1' ...
+                    for token in line.split():
+                        if token.startswith("name="):
+                            pkg = token.split("=", 1)[1].strip("'")
+                            break
+                    break
+        except Exception:
+            pass
+    if not pkg:
+        pkg = "com.moka.openclawtodo"
 
     # 장치 탐색
     dev_out = subprocess.run([adb, "devices"], capture_output=True, text=True)
@@ -395,7 +412,7 @@ def local_install_verify(apk_path: str):
         return
 
     serial = devices[0]
-    print(f"[ci] install verify on device: {serial}")
+    print(f"[ci] install verify on device: {serial}, pkg={pkg}")
 
     # 기존 패키지 캐시 충돌을 줄이기 위해 기존 앱 제거 후 설치
     subprocess.run([adb, "-s", serial, "uninstall", pkg], capture_output=True, text=True)
