@@ -178,6 +178,15 @@ def main():
     if not token:
         raise SystemExit("GITHUB_TOKEN missing")
 
+    if not (smtp_host and smtp_user and smtp_pw):
+        print("[FATAL] SMTP 환경 변수가 비었습니다. 아래를 설정하고 다시 실행하세요.")
+        print("  export SMTP_HOST=smtp.gmail.com")
+        print("  export SMTP_USER=your_email@gmail.com")
+        print("  export SMTP_PASSWORD='gmail app password'")
+        print("  export DELIVERY_EMAIL=kingjjy.game@gmail.com")
+        print("  (선택) SMTP_FROM=your_email@gmail.com, SMTP_PORT=465")
+        raise SystemExit(1)
+
     ref = os.environ.get("GITHUB_REF", "master")
     smtp_host = os.environ.get("SMTP_HOST", "")
     smtp_user = os.environ.get("SMTP_USER", "")
