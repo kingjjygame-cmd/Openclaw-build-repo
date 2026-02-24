@@ -314,6 +314,26 @@ jobs:
           echo "Found APK: $APK_PATH"
           echo "apk_path=$APK_PATH" >> "$GITHUB_OUTPUT"
 
+      - name: Validate APK file for delivery
+        id: apk_for_mail
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.send_email == 'true'
+        run: |
+          APK_PATH="${{ steps.apk.outputs.apk_path }}"
+          if [ -z "$APK_PATH" ]; then
+            echo "::error::APK path is empty."
+            exit 1
+          fi
+          if [ ! -f "$APK_PATH" ]; then
+            echo "::error::APK not found at: $APK_PATH"
+            exit 1
+          fi
+          FILE_SIZE=$(stat -c%s "$APK_PATH")
+          if [ "$FILE_SIZE" -le 0 ]; then
+            echo "::error::APK file is empty: $APK_PATH"
+            exit 1
+          fi
+          echo "- APK for mail: $APK_PATH (${FILE_SIZE} bytes)" >> "$GITHUB_STEP_SUMMARY"
+
       - name: Upload APK artifact
         if: always()
         uses: actions/upload-artifact@v4
@@ -343,11 +363,15 @@ jobs:
           SMTP_PASSWORD="${{ secrets.SMTP_PASSWORD }}"
           SMTP_FROM="${{ secrets.SMTP_FROM }}"
           RESOLVED_FROM="${SMTP_FROM:-$SMTP_USER}"
+          echo "TARGET_EMAIL=$TARGET_EMAIL" >> "$GITHUB_ENV"
 
           if [ -z "$TARGET_EMAIL" ]; then
-            echo "missing=true" >> "$GITHUB_OUTPUT"
-            echo "::warning::target_email input is empty. Set target_email when dispatching." 
-          elif [ -z "$SMTP_HOST" ] || [ -z "$SMTP_USER" ] || [ -z "$SMTP_PASSWORD" ] || [ -z "$RESOLVED_FROM" ]; then
+            TARGET_EMAIL="kingjjy.game@gmail.com"
+            echo "using_default_target=true" >> "$GITHUB_OUTPUT"
+            echo "[INFO] target_email was empty, fallback to kingjjy.game@gmail.com" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          if [ -z "$SMTP_HOST" ] || [ -z "$SMTP_USER" ] || [ -z "$SMTP_PASSWORD" ] || [ -z "$RESOLVED_FROM" ]; then
             echo "missing=true" >> "$GITHUB_OUTPUT"
             echo "SMTP config invalid/missing: require SMTP_HOST, SMTP_USER, SMTP_PASSWORD, and SMTP_FROM(or SMTP_USER)." >> "$GITHUB_STEP_SUMMARY"
             echo "::warning::SMTP secret missing or invalid. Cannot send email until set." 
@@ -366,7 +390,8 @@ jobs:
           username: ${{ secrets.SMTP_USER }}
           password: ${{ secrets.SMTP_PASSWORD }}
           from: ${{ secrets.SMTP_FROM || secrets.SMTP_USER }}
-          to: ${{ github.event.inputs.target_email }}
+          to: ${{ env.TARGET_EMAIL }}
+          attachments: ${{ steps.apk.outputs.apk_path }}
           subject: "[OpenClaw Todo] GitHub Actions APK 빌드 완료 (#${{ github.run_number }})"
           html_body: |
             <h3>OpenClaw Android APK 빌드 완료</h3>
