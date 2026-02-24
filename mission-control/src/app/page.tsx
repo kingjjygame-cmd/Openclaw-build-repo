@@ -90,6 +90,9 @@ const priorityLabel: Record<MissionPriority, string> = {
   L: "낮음",
 };
 
+const CORE_MISSION_STATEMENT =
+  "테크·앱개발 역량으로 실행 자동화를 구축하고, 재무·투자·부동산 의사결정을 데이터로 정밀하게 관리해, 12년차 엔지니어로서 가족과 함께 안정적이고 지속 가능한 금전적 자유를 달성한다.";
+
 function uid(prefix: string) {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
 }
@@ -345,6 +348,10 @@ export default function Home() {
         <p className="kicker">Mission Control</p>
         <h1>준영님 개인 미션 컨트롤 (운영판)</h1>
         <p className="sub">Next.js + localStorage 기반으로 바로 쓸 수 있는 운영형 미션 보드</p>
+        <article className="missionStatement">
+          <h2>미션 스테이트먼트</h2>
+          <p>{CORE_MISSION_STATEMENT}</p>
+        </article>
       </section>
 
       <section className="summary">
