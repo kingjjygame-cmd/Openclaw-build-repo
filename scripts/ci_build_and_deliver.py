@@ -11,10 +11,16 @@
 import json
 import os
 import ssl
+import sys
 import subprocess
 import time
 import zipfile
 import shutil
+
+import atexit
+import errno
+
+LOCK_PATH = os.environ.get("CI_PIPELINE_LOCK_PATH", "/tmp/openclaw_ci_build.lock")
 from datetime import datetime
 from typing import Dict, Optional
 from urllib.parse import quote_plus
@@ -57,6 +63,46 @@ def _parse_updated_ts(updated_at: str) -> float:
         return datetime.strptime(updated_at, "%Y-%m-%dT%H:%M:%SZ").timestamp()
     except Exception:
         return time.time()
+
+
+
+def acquire_lock():
+    flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY
+    try:
+        fd = os.open(LOCK_PATH, flags, 0o600)
+    except OSError as e:
+        if e.errno == errno.EEXIST:
+            raise RuntimeError(f"pipeline lock exists ({LOCK_PATH}). another pipeline process may be running")
+        raise
+
+    with os.fdopen(fd, 'w') as f:
+        f.write(f"{os.getpid()}\n")
+
+    def _release():
+        try:
+            os.unlink(LOCK_PATH)
+        except FileNotFoundError:
+            pass
+    atexit.register(_release)
+
+
+def active_runs(owner_repo: str, token: str):
+    runs = _get_json(f"{GITHUB_API}/repos/{owner_repo}/actions/workflows/{WORKFLOW_FILE}/runs?per_page=20", token).get('workflow_runs', [])
+    return [
+        r for r in runs
+        if r.get('status') in ('queued', 'in_progress')
+    ]
+
+
+def wait_for_active_runs(owner_repo: str, token: str):
+    while True:
+        runs = active_runs(owner_repo, token)
+        if not runs:
+            return
+
+        latest = runs[0]
+        print(f"[ci] waiting for prior run(s) to finish: latest={latest.get('id')} status={latest.get('status')} updated={latest.get('updated_at')}")
+        time.sleep(max(POLL_SECONDS, 10))
 
 
 def dispatch(owner_repo: str, ref: str, token: str):
@@ -311,12 +357,14 @@ def main():
 
     retry_count = 0
     print("[ci] start delivery loop: failure retry + delivery validation")
+    acquire_lock()
 
     while True:
         if MAX_RETRIES and retry_count >= MAX_RETRIES:
             raise SystemExit("[ci] retry limit reached")
 
         try:
+            wait_for_active_runs(owner_repo, token)
             print(f"[ci] [{retry_count + 1}] dispatching github workflow")
             dispatch(owner_repo, ref, token)
 
