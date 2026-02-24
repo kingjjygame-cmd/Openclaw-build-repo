@@ -260,10 +260,31 @@ def fetch_artifact(owner_repo: str, run_id: int, token: str, dst_zip: str = "/tm
     if not target:
         raise RuntimeError("artifact not found")
 
-    req = Request(target["archive_download_url"], headers=_headers(token))
-    with urlopen(req, context=ssl._create_unverified_context()) as r:
-        with open(dst_zip, "wb") as f:
-            f.write(r.read())
+    # GitHub artifact download URL is a 302 redirect to blob storage.
+    # Using curl -L is more stable (urllib redirects with auth header can 401).
+    result = subprocess.run(
+        [
+            "curl",
+            "-L",
+            "-H",
+            f"Authorization: Bearer {token}",
+            "-H",
+            "Accept: application/vnd.github+json",
+            "-o",
+            dst_zip,
+            target["archive_download_url"],
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    if result.returncode != 0:
+        raise RuntimeError(f"artifact download failed: rc={result.returncode} err={result.stderr.strip()}")
+
+    # quick sanity
+    if not os.path.exists(dst_zip) or os.path.getsize(dst_zip) == 0:
+        raise RuntimeError("artifact download produced empty file")
+
     return dst_zip
 
 
