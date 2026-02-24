@@ -12,6 +12,7 @@ import json
 import os
 import ssl
 import subprocess
+import hashlib
 import time
 import zipfile
 import shutil
@@ -234,17 +235,16 @@ def ensure_smoke_pass(owner_repo: str, run_id: int, token: str):
     # 마지막 job 기준 step 상태 체크
     steps = jobs[0].get("steps", [])
     target_names = {
-        "Setup and run emulator smoke test": ["success", "skipped", "neutral", "cancelled", "failure", "timed_out", "action_required", "stale"],
+        "Setup and run emulator smoke test": ["success", "skipped"],
     }
     steps_by_name = {s.get("name"): s.get("conclusion") for s in steps}
 
-    # smoke test step을 강제 성공으로 보지 않고, 스킵/성공만 통과 처리
-    for step_name in target_names:
+    for step_name, ok in target_names.items():
         if step_name not in steps_by_name:
             print(f"[ci] warn: '{step_name}' step missing in workflow")
             continue
         concl = steps_by_name[step_name]
-        if concl not in ("success", "skipped"):
+        if concl not in ok:
             raise RuntimeError(f"smoke test step not passing: {step_name} => {concl}")
 
 
@@ -285,17 +285,68 @@ def extract_apk(zip_path: str):
     return candidates[0]
 
 
+def _find_android_sdk_tool(name: str) -> str:
+    # toolchain search: explicit path, then PATH
+    candidates = [
+        os.environ.get("ANDROID_HOME", ""),
+        os.environ.get("ANDROID_SDK_ROOT", ""),
+    ]
+    for base in candidates:
+        if not base:
+            continue
+        for rel in ["build-tools", "platform-tools", "tools"]:
+            p = os.path.join(base, rel, name)
+            if os.path.isfile(p) and os.access(p, os.X_OK):
+                return p
+            # build-tools has version dirs, pick first match
+            vt = os.path.join(base, "build-tools")
+            if os.path.isdir(vt):
+                for d in sorted(os.listdir(vt), reverse=True):
+                    q = os.path.join(vt, d, name)
+                    if os.path.isfile(q) and os.access(q, os.X_OK):
+                        return q
+    return shutil.which(name)
+
+
 def validate_apk(apk_path: str):
     if not os.path.exists(apk_path):
         raise RuntimeError("APK missing")
-    if os.path.getsize(apk_path) <= 0:
+
+    size = os.path.getsize(apk_path)
+    if size <= 0:
         raise RuntimeError("APK size is 0")
 
     with zipfile.ZipFile(apk_path) as zf:
+        bad = zf.testzip()
+        if bad is not None:
+            raise RuntimeError(f"APK zip is corrupted at {bad}")
+
         names = set(zf.namelist())
-        if "AndroidManifest.xml" not in names:
-            raise RuntimeError("AndroidManifest.xml missing")
-    print(f"[ci] APK validated: {apk_path}")
+        required = {"AndroidManifest.xml", "classes.dex", "resources.arsc"}
+        missing = sorted(required - names)
+        if missing:
+            raise RuntimeError(f"APK missing required entries: {missing}")
+
+        if not any(n.endswith(".so") for n in names):
+            print("[ci] warn: APK has no .so libraries (okay for React Native)" )
+
+    # lightweight hash for traceability
+    sha256 = hashlib.sha256()
+    with open(apk_path, 'rb') as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            sha256.update(chunk)
+    print(f"[ci] APK validated: {apk_path} size={size} sha256={sha256.hexdigest()}")
+
+    # optional: run aapt badging if available
+    aapt = _find_android_sdk_tool("aapt") or _find_android_sdk_tool("aapt2")
+    if aapt:
+        try:
+            proc = subprocess.run([aapt, "dump", "badging", apk_path], capture_output=True, text=True)
+            print(proc.stdout[:800])
+            if proc.returncode != 0:
+                raise RuntimeError(f"aapt badging failed: {proc.stderr.strip()}")
+        except Exception as e:
+            raise RuntimeError(f"aapt badging execution failed: {e}")
 
 
 def local_install_verify(apk_path: str):
@@ -303,6 +354,8 @@ def local_install_verify(apk_path: str):
     if not adb:
         print("[ci] adb 미설치: 설치 검증(install/launch) 스킵")
         return
+
+    pkg = os.environ.get("APK_PACKAGE", "com.moka.openclawtodo")
 
     # 장치 탐색
     dev_out = subprocess.run([adb, "devices"], capture_output=True, text=True)
@@ -320,12 +373,17 @@ def local_install_verify(apk_path: str):
 
     serial = devices[0]
     print(f"[ci] install verify on device: {serial}")
+
+    # 기존 패키지 캐시 충돌을 줄이기 위해 기존 앱 제거 후 설치
+    subprocess.run([adb, "-s", serial, "uninstall", pkg], capture_output=True, text=True)
+
     install = subprocess.run([adb, "-s", serial, "install", "-r", apk_path], capture_output=True, text=True)
     if install.returncode != 0:
-        raise RuntimeError(f"adb install failed: {install.stderr.strip()} {install.stdout.strip()}")
+        out = (install.stdout or "") + "\\n" + (install.stderr or "")
+        if "INSTALL_PARSE_FAILED" in out or "Failed to parse" in out:
+            raise RuntimeError(f"adb install parse failure (확인 필요): {out.strip()}")
+        raise RuntimeError(f"adb install failed: {out.strip()}")
 
-    # 패키지명 추출(간단 fallback)
-    pkg = os.environ.get("APK_PACKAGE", "com.openclaw.todo")
     check = subprocess.run([adb, "-s", serial, "shell", "pm", "path", pkg], capture_output=True, text=True)
     if check.returncode != 0 or ":" not in check.stdout:
         print(f"[ci] warn: package path check failed for {pkg}")
@@ -388,6 +446,8 @@ def main():
     print("[ci] start delivery loop: failure retry + delivery validation")
     acquire_lock()
 
+    one_shot = os.environ.get("ONE_SHOT", "1") in ("1", "true", "True", "yes", "YES")
+
     while True:
         if MAX_RETRIES and retry_count >= MAX_RETRIES:
             raise SystemExit("[ci] retry limit reached")
@@ -414,7 +474,7 @@ def main():
             local_install_verify(apk_path)
 
             send_mail_with_gog(apk_path, run_url, to_addr, gog_account)
-            msg = f"✅ 앱 빌드 완료\nRun: {run_url}\nAPK: openclaw-todo-debug-apk\n수신: {to_addr}"
+            msg = f"✅ 앱 빌드 완료\\nRun: {run_url}\\nAPK: openclaw-todo-debug-apk\\n수신: {to_addr}"
             send_telegram(msg)
 
             print(f"[ci] complete: {run_url}")
@@ -422,7 +482,6 @@ def main():
             return 0
 
         except TimeoutError as e:
-            # stuck 상태: 현재 실행 run 취소 후 재시도
             print(f"[ci] watchdog timeout: {e}")
             if 'run_id' in locals():
                 cancel_run(owner_repo, run_id, token)
@@ -431,13 +490,14 @@ def main():
             print(f"[ci] retrying after timeout (count={retry_count})")
 
         except Exception as e:
-            # 실패면 원인 출력 후 즉시 재시도
             print(f"[ci] run/process failed: {e}")
             retry_count += 1
             send_telegram(f"⚠️ 빌드 실패, 재시도 중({retry_count}): {e}")
             print(f"[ci] retrying... ({retry_count})")
 
-        # 백오프
+        if one_shot:
+            raise SystemExit(f"[ci] one-shot mode: stop after one attempt ({retry_count})")
+
         time.sleep(min(20, max(5, retry_count * 2)))
 
 
