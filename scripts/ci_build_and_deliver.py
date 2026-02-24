@@ -49,7 +49,8 @@ from urllib.request import Request, urlopen
 GITHUB_API = "https://api.github.com"
 WORKFLOW_FILE = os.environ.get("WORKFLOW_FILE", "android-apk.yml")
 POLL_SECONDS = int(os.environ.get("POLL_SECONDS", "15"))
-STALL_SECONDS = int(os.environ.get("STALL_SECONDS", "300"))  # 5분
+STALL_SECONDS = int(os.environ.get("STALL_SECONDS", "300"))  # 5분 (진행성 heartbeat 감시
+RUN_MAX_SECONDS = int(os.environ.get("RUN_MAX_SECONDS", "3600"))  # 1시간(하드 타임아웃)
 MAX_RETRIES = int(os.environ.get("MAX_RETRIES", "0"))  # 0이면 무한 재시도
 
 
@@ -203,6 +204,7 @@ def wait_complete(owner_repo: str, run_id: int, token: str):
     last_status = None
     last_updated_ts = time.time()
     last_updated_at = None
+    start_ts = time.time()
 
     while True:
         run = run_info(owner_repo, run_id, token)
@@ -218,8 +220,15 @@ def wait_complete(owner_repo: str, run_id: int, token: str):
             last_updated_at = updated_at
             last_updated_ts = time.time()
 
+        # 빌드는 길어질 수 있으므로 완전 취소하지 않고 대기.
+        # 다만 heartbeat(업데이트)가 장시간 멈추면 로그만 남겨 상태 추적.
         if time.time() - last_updated_ts >= STALL_SECONDS and status in ("queued", "in_progress"):
-            raise TimeoutError(f"No status/updated_at change for >{STALL_SECONDS}s (possible stuck). run={run_id}")
+            print(f"[ci] warning: run {run_id} no heartbeat for >{STALL_SECONDS}s (status={status}), keep waiting...")
+            last_updated_ts = time.time()
+
+        # 하드 타임아웃: 과도하게 오래 걸리면 실패로 간주
+        if time.time() - start_ts >= RUN_MAX_SECONDS:
+            raise TimeoutError(f"run {run_id} exceeded hard timeout of {RUN_MAX_SECONDS}s")
 
         if status == "completed":
             return run
