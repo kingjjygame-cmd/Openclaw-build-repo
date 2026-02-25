@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 const BUTTON_SIZE = 96;
 const EDGE_PADDING = 24;
+const MOVE_DELAY_MS = 1000;
 
 export default function App() {
   const { width, height } = useWindowDimensions();
@@ -10,61 +11,65 @@ export default function App() {
   const [reaction, setReaction] = useState('');
   const [position, setPosition] = useState({ x: 0, y: 0 });
 
-  const timerRef = useRef(null);
-  const reactionRef = useRef(null);
+  const moveTimerRef = useRef(null);
+  const reactionTimerRef = useRef(null);
 
-  const clearTimers = () => {
-    if (timerRef.current) {
-      clearTimeout(timerRef.current);
-      timerRef.current = null;
-    }
-    if (reactionRef.current) {
-      clearTimeout(reactionRef.current);
-      reactionRef.current = null;
+  const clearMoveTimer = () => {
+    if (moveTimerRef.current) {
+      clearTimeout(moveTimerRef.current);
+      moveTimerRef.current = null;
     }
   };
 
-  const spawnButton = useCallback(() => {
+  const clearReactionTimer = () => {
+    if (reactionTimerRef.current) {
+      clearTimeout(reactionTimerRef.current);
+      reactionTimerRef.current = null;
+    }
+  };
+
+  const showReaction = (text) => {
+    clearReactionTimer();
+    setReaction(text);
+    reactionTimerRef.current = setTimeout(() => {
+      setReaction('');
+    }, 300);
+  };
+
+  const moveButton = useCallback(() => {
     if (width <= 0 || height <= 0) {
       return;
     }
 
     const maxX = Math.max(EDGE_PADDING, width - BUTTON_SIZE - EDGE_PADDING);
-    const maxY = Math.max(EDGE_PADDING + 90, height - BUTTON_SIZE - EDGE_PADDING);
+    const maxY = Math.max(EDGE_PADDING + 100, height - BUTTON_SIZE - EDGE_PADDING);
 
     setPosition({
-      x: Math.floor(EDGE_PADDING + Math.random() * Math.max(1, maxX - EDGE_PADDING)),
-      y: Math.floor(EDGE_PADDING + Math.random() * Math.max(1, maxY - (EDGE_PADDING + 90))),
+      x: Math.floor(EDGE_PADDING + Math.random() * Math.max(0, maxX - EDGE_PADDING)),
+      y: Math.floor(EDGE_PADDING + 100 + Math.random() * Math.max(0, maxY - (EDGE_PADDING + 100))),
     });
 
-    clearTimers();
-    timerRef.current = setTimeout(() => {
-      setReaction('놓침!');
-      reactionRef.current = setTimeout(spawnButton, 120);
-    }, 1000);
-  }, [clearTimers, height, width]);
+    clearMoveTimer();
+    moveTimerRef.current = setTimeout(() => {
+      showReaction('놓침!');
+      moveButton();
+    }, MOVE_DELAY_MS);
+  }, [clearMoveTimer, height, width]);
 
-  const flashReaction = useCallback((text) => {
-    setReaction(text);
-    if (reactionRef.current) {
-      clearTimeout(reactionRef.current);
-    }
-    reactionRef.current = setTimeout(() => setReaction(''), 280);
-  }, []);
-
-  const onPressButton = () => {
-    clearTimers();
+  const handlePress = () => {
+    clearMoveTimer();
     setCount((prev) => prev + 1);
-    flashReaction('좋아요!');
-    spawnButton();
+    showReaction('좋아요!');
+    moveButton();
   };
 
   useEffect(() => {
-    spawnButton();
+    moveButton();
     return () => {
-      clearTimers();
+      clearMoveTimer();
+      clearReactionTimer();
     };
-  }, [spawnButton, clearTimers]);
+  }, [moveButton]);
 
   return (
     <View style={styles.container}>
@@ -73,14 +78,14 @@ export default function App() {
       {reaction ? <Text style={styles.reaction}>{reaction}</Text> : null}
 
       <Pressable
-        onPress={onPressButton}
+        onPress={handlePress}
         style={({ pressed }) => [
           styles.button,
           { left: position.x, top: position.y },
           pressed && styles.buttonPressed,
         ]}
       >
-        <Text style={styles.buttonText}>START</Text>
+        <Text style={styles.buttonText}>TAP</Text>
       </Pressable>
     </View>
   );
@@ -130,6 +135,6 @@ const styles = StyleSheet.create({
   buttonText: {
     color: '#fff',
     fontWeight: '800',
-    fontSize: 24,
+    fontSize: 22,
   },
 });
