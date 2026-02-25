@@ -46,14 +46,14 @@ jobs:
         working-directory: app-android-todo
         run: npx expo prebuild --platform android --non-interactive
 
-      - name: Build Debug APK
+      - name: Build Release APK
         working-directory: app-android-todo/android
         run: |
           set -euo pipefail
 
           MAX_ATTEMPTS=2
-          BUILD_CMD="./gradlew assembleDebug"
-          LOG_FILE="assemble-debug.log"
+          BUILD_CMD="./gradlew :app:bundleReleaseJsAndAssets :app:assembleRelease"
+          LOG_FILE="assemble-release.log"
 
           for ATTEMPT in $(seq 1 "$MAX_ATTEMPTS"); do
             echo "[INFO] assemble attempt $ATTEMPT/$MAX_ATTEMPTS"
@@ -135,18 +135,35 @@ jobs:
       - name: Validate manifest / compile / lint / unit test
         working-directory: app-android-todo/android
         run: |
-          ./gradlew :app:processDebugManifest
-          ./gradlew :app:compileDebugJavaWithJavac
-          ./gradlew lintDebug
-          ./gradlew testDebugUnitTest
+          ./gradlew :app:processReleaseManifest
+          ./gradlew :app:compileReleaseJavaWithJavac
+          ./gradlew lintRelease
+          ./gradlew testReleaseUnitTest
 
       - name: Verify APK file exists and extract metadata
         id: apk_meta
         run: |
-          APK_PATH="app-android-todo/android/app/build/outputs/apk/debug/app-debug.apk"
+          RELEASE_SEARCH_PATH="app-android-todo/android/app/build/outputs/apk/release"
+          APK_PATH=$(find "$RELEASE_SEARCH_PATH" -type f -name "app-release.apk" -print | head -n 1 || true)
+
+          if [ -z "$APK_PATH" ]; then
+            echo "[ERROR] Release APK not found in: $RELEASE_SEARCH_PATH"
+            echo "[INFO] available apks:"
+            find app-android-todo/android/app/build/outputs/apk -type f -name "*.apk" -maxdepth 5 || true
+            exit 1
+          fi
+
           if [ ! -f "$APK_PATH" ]; then
-            echo "[ERROR] APK not found: $APK_PATH"
-            ls -R app-android-todo/android/app/build/outputs/apk/debug || true
+            echo "[ERROR] Release APK path is not a file: $APK_PATH"
+            exit 1
+          fi
+
+          if python3 - "$APK_PATH" -c "import zipfile,sys; z=zipfile.ZipFile(sys.argv[1]); names=set(z.namelist()); z.close();
+import sys as _s;
+print(f'[OK] JS bundle exists in APK: {sys.argv[1]}') if 'assets/index.android.bundle' in names else (_s.stderr.write('[ERROR] No bundled index.android.bundle found in %s\n' % sys.argv[1]) or _s.exit(1))" ; then
+            :
+          else
+            echo "[ERROR] Missing JS bundle in APK; release 빌드가 번들링되지 않았습니다."
             exit 1
           fi
 
