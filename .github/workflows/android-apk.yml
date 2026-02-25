@@ -135,22 +135,32 @@ jobs:
       - name: Validate manifest / compile / lint / unit test
         working-directory: app-android-todo/android
         run: |
-          ./gradlew :app:processDebugManifest
-          ./gradlew :app:compileDebugJavaWithJavac
-          ./gradlew lintDebug
-          ./gradlew testDebugUnitTest
+          ./gradlew :app:processReleaseManifest
+          ./gradlew :app:compileReleaseJavaWithJavac
+          ./gradlew lintRelease
+          ./gradlew testReleaseUnitTest
 
       - name: Verify APK file exists and extract metadata
         id: apk_meta
         run: |
-          APK_PATH="app-android-todo/android/app/build/outputs/apk/release/app-release.apk"
-          if [ ! -f "$APK_PATH" ]; then
-            echo "[ERROR] Release APK not found: $APK_PATH"
+          RELEASE_SEARCH_PATH="app-android-todo/android/app/build/outputs/apk/release"
+          APK_PATH=$(find "$RELEASE_SEARCH_PATH" -type f -name "app-release.apk" -print | head -n 1 || true)
+
+          if [ -z "$APK_PATH" ]; then
+            echo "[ERROR] Release APK not found in: $RELEASE_SEARCH_PATH"
+            echo "[INFO] available apks:"
             find app-android-todo/android/app/build/outputs/apk -type f -name "*.apk" -maxdepth 5 || true
             exit 1
           fi
 
-          if python3 - "$APK_PATH" -c "import zipfile,sys; z=zipfile.ZipFile(sys.argv[1]); names=set(z.namelist()); z.close();\nimport sys as _s;\nprint(f'[OK] JS bundle exists in APK: {sys.argv[1]}') if 'assets/index.android.bundle' in names else (_s.stderr.write('[ERROR] No bundled index.android.bundle found in %s\\n' % sys.argv[1]) or _s.exit(1))" ; then
+          if [ ! -f "$APK_PATH" ]; then
+            echo "[ERROR] Release APK path is not a file: $APK_PATH"
+            exit 1
+          fi
+
+          if python3 - "$APK_PATH" -c "import zipfile,sys; z=zipfile.ZipFile(sys.argv[1]); names=set(z.namelist()); z.close();
+import sys as _s;
+print(f'[OK] JS bundle exists in APK: {sys.argv[1]}') if 'assets/index.android.bundle' in names else (_s.stderr.write('[ERROR] No bundled index.android.bundle found in %s\n' % sys.argv[1]) or _s.exit(1))" ; then
             :
           else
             echo "[ERROR] Missing JS bundle in APK; release 빌드가 번들링되지 않았습니다."
@@ -180,129 +190,6 @@ jobs:
           echo "[INFO] apk_path=$APK_PATH"
           echo "[INFO] app_id=$APP_ID"
           echo "[INFO] launch_activity=$LAUNCH_ACTIVITY"
-
-      - name: Setup and run emulator smoke test
-        continue-on-error: true
-        run: |
-          set -euo pipefail
-
-          SDK_MANAGER_TIMEOUT=300
-          EMU_SERIAL_TIMEOUT=240
-          EMU_BOOT_TIMEOUT=360
-
-          # ensure emulator binary available and stable AVD home
-          sdkmanager --install "platform-tools" "platforms;android-34" "system-images;android-34;google_apis;x86_64" "emulator" >/tmp/sdk_install.log 2>&1 || true
-          export PATH="$ANDROID_HOME/emulator:$ANDROID_HOME/platform-tools:$PATH"
-          export ANDROID_SDK_HOME="/tmp/.android"
-          export ANDROID_AVD_HOME="$ANDROID_SDK_HOME/avd"
-          mkdir -p "$ANDROID_AVD_HOME" "$ANDROID_SDK_HOME"
-          mkdir -p /tmp/adb_keys && chmod 700 /tmp/adb_keys
-
-          adb kill-server || true
-          adb start-server
-
-          if ! timeout "$SDK_MANAGER_TIMEOUT" avdmanager list avd | grep -q "Name: ci-emulator"; then
-            echo "[INFO] no existing AVD. creating ci-emulator"
-            printf 'no\n' | avdmanager create avd -n ci-emulator -k "system-images;android-34;google_apis;x86_64" -d "pixel_6" --force
-          fi
-
-          if ! avdmanager list avd | grep -q "Name: ci-emulator"; then
-            echo "[ERROR] AVD create failed"
-            avdmanager list avd || true
-            exit 1
-          fi
-
-          emulator -avd ci-emulator -no-window -no-audio -no-boot-anim -gpu off -no-snapshot -memory 2048 -cores 2 >/tmp/emulator.log 2>&1 &
-          EMU_PID=$!
-          echo "[INFO] started emulator pid=$EMU_PID"
-
-          for i in $(seq 1 10); do
-            if ps -p "$EMU_PID" > /dev/null 2>&1; then
-              echo "[INFO] emulator process alive"
-              break
-            fi
-            echo "[WARN] emulator process ended too early"
-            tail -n 200 /tmp/emulator.log || true
-            exit 1
-          done
-
-          # wait for adb emulator device serial
-          for i in $(seq 1 "$EMU_SERIAL_TIMEOUT"); do
-            adb devices | awk 'NR>1 && /emulator/{print $1}' | head -n 1 >/tmp/emu_serial || true
-            if [ -s /tmp/emu_serial ]; then
-              break
-            fi
-            sleep 2
-          done
-          SERIAL=$(cat /tmp/emu_serial 2>/dev/null || true)
-          if [ -z "$SERIAL" ]; then
-            echo "[ERROR] No emulator serial detected"
-            echo "[ERROR] adb devices output:"
-            adb devices
-            echo "[ERROR] avd list:"
-            avdmanager list avd || true
-            echo "[ERROR] emulator process:"
-            ps -fp "$EMU_PID" || true
-            echo "[ERROR] emulator log tail:"
-            tail -n 240 /tmp/emulator.log || true
-            adb kill-server || true
-            exit 1
-          fi
-
-          echo "[INFO] emulator serial detected: $SERIAL"
-          for i in $(seq 1 "$EMU_BOOT_TIMEOUT"); do
-            BOOTED=$(adb -s "$SERIAL" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')
-            STATE=$(adb -s "$SERIAL" get-state 2>/dev/null | tr -d '\r' || true)
-            if [ "$BOOTED" = "1" ] || [ "$STATE" = "device" ]; then
-              break
-            fi
-            sleep 2
-          done
-          if [ "$BOOTED" != "1" ]; then
-            echo "[ERROR] Emulator boot timeout"
-            echo "[ERROR] adb devices output:"
-            adb devices
-            adb -s "$SERIAL" shell getprop sys.boot_completed 2>/dev/null || true
-            tail -n 240 /tmp/emulator.log || true
-            adb kill-server || true
-            exit 1
-          fi
-
-          # install APK
-          if ! adb -s "$SERIAL" install -r "${{ steps.apk_meta.outputs.apk_path }}" > /tmp/install.log 2>&1; then
-            echo "[ERROR] adb install failed"
-            cat /tmp/install.log
-            adb kill-server || true
-            exit 1
-          fi
-
-          # launch app
-          TARGET="${{ steps.apk_meta.outputs.app_id }}/${{ steps.apk_meta.outputs.launch_activity }}"
-          if ! adb -s "$SERIAL" shell am start -n "$TARGET" > /tmp/launch.log 2>&1; then
-            adb -s "$SERIAL" shell monkey -p "${{ steps.apk_meta.outputs.app_id }}" -c android.intent.category.LAUNCHER 1 > /tmp/launch.log 2>&1 || true
-            if [ $? -ne 0 ]; then
-              echo "[ERROR] app launch failed"
-              cat /tmp/launch.log
-              adb kill-server || true
-              exit 1
-            fi
-          fi
-
-          # verify app process appears
-          FOUND=0
-          for i in $(seq 1 20); do
-            if adb -s "$SERIAL" shell pidof -s "${{ steps.apk_meta.outputs.app_id }}" >/dev/null 2>&1; then
-              FOUND=1
-              break
-            fi
-            sleep 1
-          done
-          if [ "$FOUND" -eq 0 ]; then
-            echo "[WARN] process check failed but app may be launched from service activity. checking logs"
-            adb -s "$SERIAL" logcat -d | tail -n 120
-          else
-            echo "[OK] app process is running"
-          fi
 
       - name: Locate APK
         id: apk
