@@ -3,29 +3,27 @@ import { useState } from 'react';
 
 export default function App() {
   const [count, setCount] = useState(0);
+  const [moved, setMoved] = useState(false);
+
+  const handlePress = () => {
+    setCount((prev) => prev + 1);
+    setMoved((prev) => !prev);
+  };
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Hello World!</Text>
-      <Text style={styles.subtitle}>OpenClaw Android Starter</Text>
+      <Text style={styles.counter}>{count}</Text>
 
-      <View style={styles.counterWrap}>
-        <Pressable
-          onPress={() => setCount((prev) => prev - 1)}
-          style={({ pressed }) => [styles.btn, pressed && styles.btnPressed]}
-        >
-          <Text style={styles.btnText}>－</Text>
-        </Pressable>
-
-        <Text style={styles.counterText}>{count}</Text>
-
-        <Pressable
-          onPress={() => setCount((prev) => prev + 1)}
-          style={({ pressed }) => [styles.btn, pressed && styles.btnPressed]}
-        >
-          <Text style={styles.btnText}>＋</Text>
-        </Pressable>
-      </View>
+      <Pressable
+        onPress={handlePress}
+        style={({ pressed }) => [
+          styles.button,
+          moved ? styles.buttonPosBottom : styles.buttonPosTop,
+          pressed && styles.buttonPressed,
+        ]}
+      >
+        <Text style={styles.buttonText}>터치</Text>
+      </Pressable>
     </View>
   );
 }
@@ -34,53 +32,42 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#ffffff',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
-  title: {
-    fontSize: 34,
-    fontWeight: '700',
-    color: '#0f172a',
-    marginBottom: 6,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#475569',
-  },
-  counterWrap: {
+  counter: {
     position: 'absolute',
+    top: 40,
     left: 0,
     right: 0,
-    bottom: 140,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 16,
-  },
-  counterText: {
-    fontSize: 42,
-    color: '#0f172a',
-    fontWeight: '700',
-    minWidth: 72,
     textAlign: 'center',
+    fontSize: 46,
+    fontWeight: '700',
+    color: '#0f172a',
   },
-  btn: {
-    width: 54,
+  button: {
+    width: 130,
     height: 54,
     borderRadius: 27,
     backgroundColor: '#2563eb',
     alignItems: 'center',
     justifyContent: 'center',
-    elevation: 5,
+    position: 'absolute',
+    left: '50%',
+    transform: [{ translateX: -65 }],
+    elevation: 6,
   },
-  btnPressed: {
+  buttonPosTop: {
+    top: 220,
+  },
+  buttonPosBottom: {
+    bottom: 220,
+  },
+  buttonPressed: {
     backgroundColor: '#1d4ed8',
-    transform: [{ scale: 0.96 }],
+    transform: [{ translateX: -65 }, { scale: 0.96 }],
   },
-  btnText: {
-    fontSize: 34,
+  buttonText: {
+    fontSize: 22,
     color: '#fff',
     fontWeight: '700',
-    lineHeight: 36,
   },
 });
