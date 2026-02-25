@@ -280,10 +280,10 @@ def resolve_artifact_download_url(artifact: dict, token: str) -> str:
 
 
 def artifact_links(owner_repo: str, run: dict, artifact: dict, run_id: int, token: str):
-    suite_id = run.get("check_suite_id")
     artifact_page = ""
-    if suite_id and artifact:
-        artifact_page = f"https://github.com/{owner_repo}/suites/{suite_id}/artifacts/{artifact.get('id')}"
+    if artifact:
+        # GitHub UI artifact URL is now reliably exposed via run page path.
+        artifact_page = f"https://github.com/{owner_repo}/actions/runs/{run_id}/artifacts/{artifact.get('id')}"
 
     api_url = artifact.get("archive_download_url") if artifact else ""
     direct_url = resolve_artifact_download_url(artifact, token) if artifact else ""
@@ -570,6 +570,12 @@ def main():
                 msg_lines.append(f"직접 다운로드(권장): {artifact_direct}")
             elif artifact_api:
                 msg_lines.append(f"API 다운로드 링크: {artifact_api}")
+
+            # Always print summary lines so non-telegram environments also receive report.
+            print("[ci] delivery summary:")
+            for line in msg_lines:
+                print(f"[ci] {line}")
+
             send_telegram("\n".join(msg_lines))
 
             print(f"[ci] complete: {run_url}")
