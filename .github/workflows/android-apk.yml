@@ -55,13 +55,13 @@ jobs:
 
           if ./gradlew help -q --task :app:bundleReleaseJsAndAssets > /dev/null 2>&1; then
             echo "[INFO] Using release bundle task"
-            BUILD_CMD="./gradlew :app:bundleReleaseJsAndAssets :app:assembleRelease"
+            BUILD_CMD="yes | ./gradlew :app:bundleReleaseJsAndAssets :app:assembleRelease"
           elif ./gradlew help -q --task :app:createBundleReleaseJsAndAssets > /dev/null 2>&1; then
             echo "[INFO] Using createBundleReleaseJsAndAssets task"
-            BUILD_CMD="./gradlew :app:createBundleReleaseJsAndAssets :app:assembleRelease"
+            BUILD_CMD="yes | ./gradlew :app:createBundleReleaseJsAndAssets :app:assembleRelease"
           else
             echo "[WARN] No bundle task found, using assembleRelease only"
-            BUILD_CMD="./gradlew :app:assembleRelease"
+            BUILD_CMD="yes | ./gradlew :app:assembleRelease"
           fi
 
           echo "[INFO] build command: $BUILD_CMD"
