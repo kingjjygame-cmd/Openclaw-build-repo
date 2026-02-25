@@ -1,4 +1,5 @@
 name: Android APK Build (GitHub Actions)
+# rerun-trigger: force release artifact validation
 
 concurrency:
   group: android-apk-build-${{ github.ref }}
