@@ -208,6 +208,7 @@ jobs:
 
       - name: Setup and run emulator smoke test
         continue-on-error: true
+        timeout-minutes: 8
         run: |
           set -euo pipefail
 
