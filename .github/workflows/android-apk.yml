@@ -53,102 +53,19 @@ jobs:
         run: |
           set -euo pipefail
 
-          MAX_ATTEMPTS=2
-          BUNDLE_TASK=""
           if ./gradlew help -q --task :app:bundleReleaseJsAndAssets > /dev/null 2>&1; then
-            BUNDLE_TASK=":app:bundleReleaseJsAndAssets"
+            echo "[INFO] Using release bundle task"
+            BUILD_CMD="./gradlew :app:bundleReleaseJsAndAssets :app:assembleRelease"
           elif ./gradlew help -q --task :app:createBundleReleaseJsAndAssets > /dev/null 2>&1; then
-            BUNDLE_TASK=":app:createBundleReleaseJsAndAssets"
+            echo "[INFO] Using createBundleReleaseJsAndAssets task"
+            BUILD_CMD="./gradlew :app:createBundleReleaseJsAndAssets :app:assembleRelease"
           else
-            BUNDLE_TASK=""
-          fi
-
-          if [ -n "$BUNDLE_TASK" ]; then
-            echo "[INFO] Using bundle task: $BUNDLE_TASK"
-            BUILD_CMD="./gradlew $BUNDLE_TASK :app:assembleRelease"
-          else
-            echo "[WARN] No release bundle task found; using assembleRelease only"
+            echo "[WARN] No bundle task found, using assembleRelease only"
             BUILD_CMD="./gradlew :app:assembleRelease"
           fi
 
-          LOG_FILE="assemble-release.log"
-
-          for ATTEMPT in $(seq 1 "$MAX_ATTEMPTS"); do
-            echo "[INFO] assemble attempt $ATTEMPT/$MAX_ATTEMPTS"
-            : > "$LOG_FILE"
-
-            $BUILD_CMD > "$LOG_FILE" 2>&1 &
-            BUILD_PID=$!
-            echo "[INFO] gradle pid=$BUILD_PID"
-
-            LAST_SIZE=0
-            LAST_PROGRESS_TS=$(date +%s)
-            STALLED=0
-            BUILD_EXIT=255
-            COMPLETED=0
-
-            for _ in $(seq 1 240); do
-              sleep 10
-
-              if ! kill -0 "$BUILD_PID" 2>/dev/null; then
-                if wait "$BUILD_PID"; then
-                  BUILD_EXIT=0
-                  echo "[OK] assemble success"
-                else
-                  BUILD_EXIT=$?
-                  echo "[WARN] assemble exited rc=$BUILD_EXIT"
-                fi
-                COMPLETED=1
-                break
-              fi
-
-              CURRENT_SIZE=$(wc -c < "$LOG_FILE")
-              NOW_TS=$(date +%s)
-
-              if [ "$CURRENT_SIZE" -gt "$LAST_SIZE" ]; then
-                LAST_SIZE=$CURRENT_SIZE
-                LAST_PROGRESS_TS=$NOW_TS
-                echo "[INFO] log progress ($(date -u +%H:%M:%S), bytes=$CURRENT_SIZE)"
-              else
-                ELAPSED=$((NOW_TS - LAST_PROGRESS_TS))
-                if [ "$ELAPSED" -ge 300 ]; then
-                  STALLED=1
-                  echo "[WARN] no log growth for ${ELAPSED}s in assemble step"
-                  break
-                fi
-              fi
-            done
-
-            if [ "$COMPLETED" -eq 0 ]; then
-              if ! kill -0 "$BUILD_PID" 2>/dev/null; then
-                BUILD_EXIT=0
-                COMPLETED=1
-              fi
-            fi
-
-            if [ "$COMPLETED" -eq 0 ] && [ "$STALLED" -eq 1 ]; then
-              ps -p "$BUILD_PID" -o pid,pcpu,pmem,stat,cmd || true
-              tail -n 40 "$LOG_FILE" || true
-              if kill -0 "$BUILD_PID" 2>/dev/null; then
-                echo "[WARN] stopping stalled assemble pid=$BUILD_PID"
-                kill "$BUILD_PID" 2>/dev/null || true
-                sleep 3
-                kill -9 "$BUILD_PID" 2>/dev/null || true
-              fi
-              if [ "$ATTEMPT" -lt "$MAX_ATTEMPTS" ]; then
-                echo "[WARN] retrying assemble"
-                continue
-              fi
-            fi
-
-            if [ "$BUILD_EXIT" -ne 0 ]; then
-              echo "[ERROR] assemble failed (attempt $ATTEMPT)"
-              tail -n 120 "$LOG_FILE" || true
-              exit 1
-            fi
-
-            break
-          done
+          echo "[INFO] build command: $BUILD_CMD"
+          $BUILD_CMD
 
       - name: Validate manifest / compile / lint / unit test
         working-directory: app-android-todo/android
