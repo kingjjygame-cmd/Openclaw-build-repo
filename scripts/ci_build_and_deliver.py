@@ -268,15 +268,43 @@ def resolve_artifact_download_url(artifact: dict, token: str) -> str:
     if not base_url:
         return ""
 
+    # 1) try native follow redirect with auth header
     req = Request(base_url, headers=_headers(token))
     try:
         with urlopen(req, context=ssl._create_unverified_context(), timeout=30) as r:
             return getattr(r, "url", base_url)
-    except Exception as e:
-        loc = None
-        if hasattr(e, "headers"):
-            loc = e.headers.get("Location")
-        return loc or base_url
+    except Exception:
+        pass
+
+    # 2) fallback: use curl -I -L to capture effective URL from API->blob redirect
+    try:
+        proc = subprocess.run(
+            [
+                "curl",
+                "-I",
+                "-L",
+                "-H",
+                f"Authorization: Bearer {token}",
+                "-H",
+                "Accept: application/vnd.github+json",
+                "-s",
+                "-o",
+                "/dev/null",
+                "-w",
+                "%{url_effective}",
+                base_url,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if proc.returncode == 0 and proc.stdout.strip():
+            return proc.stdout.strip()
+    except Exception:
+        pass
+
+    # no redirect info available
+    return base_url
 
 
 def artifact_links(owner_repo: str, run: dict, artifact: dict, run_id: int, token: str):
