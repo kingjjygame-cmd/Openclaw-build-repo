@@ -159,9 +159,7 @@ jobs:
             exit 1
           fi
 
-          if python3 - "$APK_PATH" -c "import zipfile,sys; z=zipfile.ZipFile(sys.argv[1]); names=set(z.namelist()); z.close();
-import sys as _s;
-print(f'[OK] JS bundle exists in APK: {sys.argv[1]}') if 'assets/index.android.bundle' in names else (_s.stderr.write('[ERROR] No bundled index.android.bundle found in %s\n' % sys.argv[1]) or _s.exit(1))" ; then
+          if python3 - "$APK_PATH" -c "import zipfile,sys; z=zipfile.ZipFile(sys.argv[1]); names=set(z.namelist()); z.close(); import sys as _s; print(f'[OK] JS bundle exists in APK: {sys.argv[1]}') if 'assets/index.android.bundle' in names else (_s.stderr.write('[ERROR] No bundled index.android.bundle found in %s\\n' % sys.argv[1]) or _s.exit(1))" ; then
             :
           else
             echo "[ERROR] Missing JS bundle in APK; release 빌드가 번들링되지 않았습니다."
