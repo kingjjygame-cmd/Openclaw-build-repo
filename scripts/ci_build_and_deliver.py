@@ -19,8 +19,10 @@ import shutil
 
 import atexit
 import errno
+import fcntl
 
 LOCK_PATH = os.environ.get("CI_PIPELINE_LOCK_PATH", "/tmp/openclaw_ci_build.lock")
+DISPATCH_LOCK_PATH = os.environ.get("CI_DISPATCH_LOCK_PATH", "/tmp/openclaw_ci_dispatch.lock")
 
 def _lock_owner_alive():
     try:
@@ -116,6 +118,32 @@ def acquire_lock():
     atexit.register(_release)
 
 
+def _acquire_dispatch_lock_nonblocking() -> int:
+    flags = os.O_CREAT | os.O_RDWR
+    fd = os.open(DISPATCH_LOCK_PATH, flags, 0o600)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        os.close(fd)
+        raise RuntimeError("another process is currently preparing a dispatch")
+
+    os.lseek(fd, 0, os.SEEK_SET)
+    os.ftruncate(fd, 0)
+    os.write(fd, f"{os.getpid()}\n".encode())
+    return fd
+
+
+def _release_dispatch_lock(fd: int):
+    try:
+        fcntl.flock(fd, fcntl.LOCK_UN)
+    except Exception:
+        pass
+    try:
+        os.close(fd)
+    except Exception:
+        pass
+
+
 def active_runs(owner_repo: str, token: str):
     runs = _get_json(f"{GITHUB_API}/repos/{owner_repo}/actions/workflows/{WORKFLOW_FILE}/runs?per_page=20", token).get('workflow_runs', [])
     return [
@@ -124,16 +152,37 @@ def active_runs(owner_repo: str, token: str):
     ]
 
 
-def wait_for_active_runs(owner_repo: str, token: str):
+def _fmt_wait_line(prefix: str, run: dict, elapsed_sec: int) -> str:
+    rid = run.get('id')
+    status = run.get('status')
+    updated_at = run.get('updated_at') or 'n/a'
+    return f"{prefix}: latest={rid} status={status} updated={updated_at} waited={elapsed_sec}s"
+
+
+def wait_for_active_runs(owner_repo: str, token: str, max_wait_seconds: int = 0):
+    """Wait only while active runs exist.
+
+    max_wait_seconds=0 means no hard timeout; we still emit elapsed heartbeat so
+    operators know progress is being observed even if upstream run is long.
+    """
+    start = time.time()
+    last_update = 0
     while True:
         runs = active_runs(owner_repo, token)
         if not runs:
             return
 
         latest = runs[0]
-        print(f"[ci] waiting for prior run(s) to finish: latest={latest.get('id')} status={latest.get('status')} updated={latest.get('updated_at')}")
-        time.sleep(max(POLL_SECONDS, 10))
+        now = int(time.time() - start)
+        if now - last_update >= 20:
+            print(_fmt_wait_line("[ci] waiting for prior run(s) to finish", latest, now))
+            last_update = now
 
+        if max_wait_seconds and now >= max_wait_seconds:
+            # Keep going for safety, but clearly mark this as a prolonged gate.
+            print(_fmt_wait_line("[ci] warning: active run gate exceeded configured timeout", latest, now))
+
+        time.sleep(max(POLL_SECONDS, 5))
 
 def dispatch(owner_repo: str, ref: str, token: str):
     url = f"{GITHUB_API}/repos/{owner_repo}/actions/workflows/{WORKFLOW_FILE}/dispatches"
@@ -366,6 +415,9 @@ def extract_apk(zip_path: str):
         raise RuntimeError("APK not in artifact")
 
     for p in candidates:
+        if p.endswith("app-release.apk"):
+            return p
+    for p in candidates:
         if p.endswith("app-debug.apk"):
             return p
     return candidates[0]
@@ -413,8 +465,11 @@ def validate_apk(apk_path: str):
         if missing:
             raise RuntimeError(f"APK missing required entries: {missing}")
 
+        if "assets/index.android.bundle" not in names:
+            raise RuntimeError("APK does not include assets/index.android.bundle. This is a release-debug bridge issue; build release artifact must include JS bundle.")
+
         if not any(n.endswith(".so") for n in names):
-            print("[ci] warn: APK has no .so libraries (okay for React Native)" )
+            print("[ci] warn: APK has no .so libraries (okay for React Native)")
 
     # lightweight hash for traceability
     sha256 = hashlib.sha256()
@@ -556,8 +611,25 @@ def main():
         if MAX_RETRIES and retry_count >= MAX_RETRIES:
             raise SystemExit("[ci] retry limit reached")
 
+        dispatch_lock_fd = None
+
         try:
+            while True:
+                try:
+                    dispatch_lock_fd = _acquire_dispatch_lock_nonblocking()
+                    print("[ci] acquired dispatch gate")
+                    break
+                except RuntimeError:
+                    print("[ci] dispatch gate busy; retrying after short wait")
+                    time.sleep(3)
+
+            # Ensure no active run has appeared between dispatch attempts.
+            # If one appeared, release gate and retry quickly to avoid duplicate dispatch.
             wait_for_active_runs(owner_repo, token)
+            if active_runs(owner_repo, token):
+                print("[ci] dispatch gate check found active run after wait; delaying")
+                continue
+
             print(f"[ci] [{retry_count + 1}] dispatching github workflow")
             dispatch(owner_repo, ref, token)
 
@@ -623,6 +695,11 @@ def main():
             retry_count += 1
             send_telegram(f"⚠️ 빌드 실패, 재시도 중({retry_count}): {e}")
             print(f"[ci] retrying... ({retry_count})")
+
+        finally:
+            if dispatch_lock_fd is not None:
+                _release_dispatch_lock(dispatch_lock_fd)
+                dispatch_lock_fd = None
 
         if one_shot:
             raise SystemExit(f"[ci] one-shot mode: stop after one attempt ({retry_count})")

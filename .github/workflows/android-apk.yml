@@ -52,7 +52,7 @@ jobs:
           set -euo pipefail
 
           MAX_ATTEMPTS=2
-          BUILD_CMD="./gradlew assembleRelease"
+          BUILD_CMD="./gradlew :app:bundleReleaseJsAndAssets :app:assembleRelease"
           LOG_FILE="assemble-release.log"
 
           for ATTEMPT in $(seq 1 "$MAX_ATTEMPTS"); do
@@ -69,7 +69,7 @@ jobs:
             BUILD_EXIT=255
             COMPLETED=0
 
-            for _ in $(seq 1 240); do
+            for _ in $(seq 1 300); do
               sleep 10
 
               if ! kill -0 "$BUILD_PID" 2>/dev/null; then
@@ -145,8 +145,15 @@ jobs:
         run: |
           APK_PATH="app-android-todo/android/app/build/outputs/apk/release/app-release.apk"
           if [ ! -f "$APK_PATH" ]; then
-            echo "[ERROR] APK not found: $APK_PATH"
-            ls -R app-android-todo/android/app/build/outputs/apk/debug || true
+            echo "[ERROR] Release APK not found: $APK_PATH"
+            find app-android-todo/android/app/build/outputs/apk -type f -name "*.apk" -maxdepth 5 || true
+            exit 1
+          fi
+
+          if python3 - "$APK_PATH" -c "import zipfile,sys; z=zipfile.ZipFile(sys.argv[1]); names=set(z.namelist()); z.close();\nimport sys as _s;\nprint(f'[OK] JS bundle exists in APK: {sys.argv[1]}') if 'assets/index.android.bundle' in names else (_s.stderr.write('[ERROR] No bundled index.android.bundle found in %s\\n' % sys.argv[1]) or _s.exit(1))" ; then
+            :
+          else
+            echo "[ERROR] Missing JS bundle in APK; release 빌드가 번들링되지 않았습니다."
             exit 1
           fi
 
