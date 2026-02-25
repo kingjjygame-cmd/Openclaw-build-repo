@@ -49,6 +49,7 @@ jobs:
 
       - name: Build Release APK
         working-directory: app-android-todo/android
+        timeout-minutes: 30
         run: |
           set -euo pipefail
 
