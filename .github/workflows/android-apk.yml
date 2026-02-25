@@ -53,7 +53,23 @@ jobs:
           set -euo pipefail
 
           MAX_ATTEMPTS=2
-          BUILD_CMD="./gradlew :app:bundleReleaseJsAndAssets :app:assembleRelease"
+          BUNDLE_TASK=""
+          if ./gradlew help -q --task :app:bundleReleaseJsAndAssets > /dev/null 2>&1; then
+            BUNDLE_TASK=":app:bundleReleaseJsAndAssets"
+          elif ./gradlew help -q --task :app:createBundleReleaseJsAndAssets > /dev/null 2>&1; then
+            BUNDLE_TASK=":app:createBundleReleaseJsAndAssets"
+          else
+            BUNDLE_TASK=""
+          fi
+
+          if [ -n "$BUNDLE_TASK" ]; then
+            echo "[INFO] Using bundle task: $BUNDLE_TASK"
+            BUILD_CMD="./gradlew $BUNDLE_TASK :app:assembleRelease"
+          else
+            echo "[WARN] No release bundle task found; using assembleRelease only"
+            BUILD_CMD="./gradlew :app:assembleRelease"
+          fi
+
           LOG_FILE="assemble-release.log"
 
           for ATTEMPT in $(seq 1 "$MAX_ATTEMPTS"); do
