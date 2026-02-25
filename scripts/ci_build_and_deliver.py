@@ -49,7 +49,8 @@ from urllib.request import Request, urlopen
 GITHUB_API = "https://api.github.com"
 WORKFLOW_FILE = os.environ.get("WORKFLOW_FILE", "android-apk.yml")
 POLL_SECONDS = int(os.environ.get("POLL_SECONDS", "15"))
-STALL_SECONDS = int(os.environ.get("STALL_SECONDS", "300"))  # 5분 (진행성 heartbeat 감시
+STALL_SECONDS = int(os.environ.get("STALL_SECONDS", "300"))  # 5분 (진행성 heartbeat 감시)
+JOB_POLL_SUMMARY_SECONDS = int(os.environ.get("JOB_POLL_SUMMARY_SECONDS", "60"))
 MAX_RETRIES = int(os.environ.get("MAX_RETRIES", "0"))  # 0이면 무한 재시도
 
 
@@ -169,6 +170,43 @@ def run_jobs(owner_repo: str, run_id: int, token: str):
     return run, jobs
 
 
+
+
+def _active_step_snapshot(jobs: list) -> str:
+    if not jobs:
+        return "jobs unavailable"
+
+    job = jobs[0]
+    steps = job.get("steps", []) or []
+    current = "(no-steps)"
+    done = 0
+    total = len(steps)
+    if steps:
+        # 마지막 상태 변화 중심으로 현재 진행 단계 추정
+        for s in reversed(steps):
+            if s.get("conclusion") is None and s.get("status") == "in_progress":
+                current = f"{s.get('name')}:{s.get('status')}"
+                break
+            if s.get("conclusion") in ("success", "skipped"):
+                done = max(done, steps.index(s) + 1)
+        if current == "(no-steps)":
+            if total == 0:
+                current = "setup"
+            else:
+                last = steps[-1]
+                current = f"{last.get('name')}:{last.get('status') or last.get('conclusion')}"
+
+    if total > 0 and done == 0:
+        for s in steps:
+            if s.get("conclusion") in ("success", "skipped"):
+                done += 1
+
+    return f"{job.get('name')} step={current} done={done}/{total}"
+
+
+def _should_print_step_summary(last_print_ts: float, now: float) -> bool:
+    return (now - last_print_ts) >= JOB_POLL_SUMMARY_SECONDS
+
 def _latest_fail_step(jobs: list) -> Optional[Dict]:
     if not jobs:
         return None
@@ -203,11 +241,14 @@ def wait_complete(owner_repo: str, run_id: int, token: str):
     last_status = None
     last_updated_ts = time.time()
     last_updated_at = None
+    last_step_ts = 0.0
+
     while True:
         run = run_info(owner_repo, run_id, token)
         status = run.get("status")
         conclusion = run.get("conclusion")
         updated_at = run.get("updated_at")
+        now = time.time()
 
         if status != last_status:
             print(f"[ci] run {run_id}: {status} / {conclusion} ({updated_at})")
@@ -215,7 +256,15 @@ def wait_complete(owner_repo: str, run_id: int, token: str):
 
         if updated_at and updated_at != last_updated_at:
             last_updated_at = updated_at
-            last_updated_ts = time.time()
+            last_updated_ts = now
+
+        if _should_print_step_summary(last_step_ts, now):
+            try:
+                _, jobs = run_jobs(owner_repo, run_id, token)
+                print(f"[ci] progress: {_active_step_snapshot(jobs)}")
+            except Exception:
+                pass
+            last_step_ts = now
 
         # 빌드는 길어질 수 있으므로 완전 취소하지 않고 대기.
         # 다만 heartbeat(업데이트)가 장시간 멈추면 로그만 남겨 상태 추적.
