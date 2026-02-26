@@ -1,9 +1,10 @@
 import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 const BUTTON_SIZE = 96;
 const EDGE_PADDING = 24;
 const MOVE_DELAY_MS = 1_000; // fixed at 1 second
+const APP_REV = 'tap-dwell-v3';
 
 export default function App() {
   const { width, height } = useWindowDimensions();
@@ -13,9 +14,11 @@ export default function App() {
 
   const moveTimerRef = useRef(null);
   const reactionTimerRef = useRef(null);
-  const sizeRef = useRef({ width: 0, height: 0 });
-  const cycleRef = useRef(0);
-  const activeRef = useRef(false);
+  const sizeRef = useRef({ width, height });
+
+  useEffect(() => {
+    sizeRef.current = { width, height };
+  }, [width, height]);
 
   const clearMoveTimer = () => {
     if (moveTimerRef.current) {
@@ -39,35 +42,29 @@ export default function App() {
     }, 300);
   };
 
-  // track latest size to avoid retriggering move loop on window changes
-  useEffect(() => {
-    sizeRef.current = { width, height };
-  }, [width, height]);
-
-  const moveButton = useCallback(() => {
+  const moveButton = () => {
     const { width: w, height: h } = sizeRef.current;
-    if (w <= 0 || h <= 0 || !activeRef.current) {
+    if (w <= 0 || h <= 0) {
       return;
     }
 
     const maxX = Math.max(EDGE_PADDING, w - BUTTON_SIZE - EDGE_PADDING);
     const maxY = Math.max(EDGE_PADDING + 100, h - BUTTON_SIZE - EDGE_PADDING);
 
-    const nextCycle = cycleRef.current;
     setPosition({
       x: Math.floor(EDGE_PADDING + Math.random() * Math.max(0, maxX - EDGE_PADDING)),
       y: Math.floor(EDGE_PADDING + 100 + Math.random() * Math.max(0, maxY - (EDGE_PADDING + 100))),
     });
+  };
 
+  const scheduleMove = () => {
     clearMoveTimer();
     moveTimerRef.current = setTimeout(() => {
-      if (!activeRef.current || nextCycle !== cycleRef.current) {
-        return;
-      }
       showReaction('놓침!');
       moveButton();
+      scheduleMove();
     }, MOVE_DELAY_MS);
-  }, [showReaction, clearMoveTimer]);
+  };
 
   const handlePress = () => {
     setCount((prev) => prev + 1);
@@ -75,20 +72,18 @@ export default function App() {
   };
 
   useEffect(() => {
-    activeRef.current = true;
-    cycleRef.current += 1;
     moveButton();
+    scheduleMove();
 
     return () => {
-      activeRef.current = false;
-      cycleRef.current += 1;
       clearMoveTimer();
       clearReactionTimer();
     };
-  }, [moveButton, clearMoveTimer, clearReactionTimer]);
+  }, []);
 
   return (
     <View style={styles.container}>
+      <Text style={styles.revision}>rev: {APP_REV}</Text>
       <Text style={styles.counter}>🧸 {count}</Text>
       <Text style={styles.hint}>이동 간격: {MOVE_DELAY_MS}ms</Text>
 
@@ -112,6 +107,16 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f8fbff',
+  },
+  revision: {
+    position: 'absolute',
+    top: 12,
+    left: 0,
+    right: 0,
+    textAlign: 'center',
+    fontSize: 12,
+    color: '#64748b',
+    fontWeight: '700',
   },
   counter: {
     position: 'absolute',
