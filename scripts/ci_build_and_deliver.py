@@ -21,6 +21,7 @@ import atexit
 import errno
 
 LOCK_PATH = os.environ.get("CI_PIPELINE_LOCK_PATH", "/tmp/openclaw_ci_build.lock")
+REPORT_PATH = os.environ.get("OPEN_CLAW_DELIVERY_REPORT_PATH", "/tmp/openclaw_delivery_report.json")
 
 def _lock_owner_alive():
     try:
@@ -336,8 +337,7 @@ def fetch_artifact(owner_repo: str, run_id: int, token: str, dst_zip: str = "/tm
     if not os.path.exists(dst_zip) or os.path.getsize(dst_zip) == 0:
         raise RuntimeError("artifact download produced empty file")
 
-    return dst_zip
-
+    return dst_zip, target
 
 def extract_apk(zip_path: str):
     out_dir = "/tmp/openclaw-apk-delivery"
@@ -357,6 +357,33 @@ def extract_apk(zip_path: str):
         if p.endswith("app-debug.apk"):
             return p
     return candidates[0]
+
+
+def resolve_artifact_download_url(archive_download_url: str, token: str) -> str:
+    """Resolve GitHub artifact API URL to direct blob URL for direct download."""
+    cmd = [
+        "curl",
+        "-sI",
+        "-L",
+        "-H",
+        f"Authorization: Bearer {token}",
+        "-H",
+        "Accept: application/vnd.github+json",
+        archive_download_url,
+    ]
+
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        print(f"[ci] warn: failed to resolve artifact direct url (rc={result.returncode})")
+        return archive_download_url
+
+    direct_url = ""
+    for line in reversed(result.stdout.splitlines()):
+        if line.lower().startswith("location:"):
+            direct_url = line.split(":", 1)[1].strip()
+            break
+
+    return direct_url or archive_download_url
 
 
 def _find_android_sdk_tool(name: str) -> str:
@@ -382,6 +409,14 @@ def _find_android_sdk_tool(name: str) -> str:
     return shutil.which(name)
 
 
+def compute_file_sha256(path: str) -> str:
+    hasher = hashlib.sha256()
+    with open(path, 'rb') as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            hasher.update(chunk)
+    return hasher.hexdigest()
+
+
 def validate_apk(apk_path: str):
     if not os.path.exists(apk_path):
         raise RuntimeError("APK missing")
@@ -405,11 +440,8 @@ def validate_apk(apk_path: str):
             print("[ci] warn: APK has no .so libraries (okay for React Native)" )
 
     # lightweight hash for traceability
-    sha256 = hashlib.sha256()
-    with open(apk_path, 'rb') as f:
-        for chunk in iter(lambda: f.read(1024 * 1024), b""):
-            sha256.update(chunk)
-    print(f"[ci] APK validated: {apk_path} size={size} sha256={sha256.hexdigest()}")
+    sha256 = compute_file_sha256(apk_path)
+    print(f"[ci] APK validated: {apk_path} size={size} sha256={sha256}")
 
     # optional: run aapt badging if available
     aapt = _find_android_sdk_tool("aapt") or _find_android_sdk_tool("aapt2")
@@ -421,6 +453,12 @@ def validate_apk(apk_path: str):
                 raise RuntimeError(f"aapt badging failed: {proc.stderr.strip()}")
         except Exception as e:
             raise RuntimeError(f"aapt badging execution failed: {e}")
+
+    return {
+        "size": size,
+        "sha256": sha256,
+        "path": apk_path,
+    }
 
 
 def local_install_verify(apk_path: str):
@@ -482,28 +520,62 @@ def local_install_verify(apk_path: str):
         print(f"[ci] package installed: {pkg}")
 
 
+# deprecated: gog mail delivery disabled by policy
+
 def send_mail_with_gog(apk_path: str, run_url: str, to_addr: str, account: str):
-    subject = "[OpenClaw Todo] APK 빌드 성공 - 검증 완료"
-    body = f"APK 빌드/검증 완료\n\nRun: {run_url}\n첨부: app-debug.apk"
+    print("[ci] gog gmail disabled: skipped")
+    return True
 
-    cmd = [
-        "gog",
-        "gmail",
-        "send",
-        "--account", account,
-        "--no-input",
-        "--force",
-        "--to", to_addr,
-        "--subject", subject,
-        "--body", body,
-        "--attach", apk_path,
-    ]
 
-    completed = subprocess.run(cmd, capture_output=True, text=True)
-    if completed.returncode != 0:
-        raise RuntimeError(
-            f"gog gmail send failed: rc={completed.returncode}, out={completed.stdout.strip()}, err={completed.stderr.strip()}"
-        )
+def send_delivery_summary(owner_repo: str, run_id: int, run_url: str, artifact: Dict, apk_info: Dict):
+    artifact_name = artifact.get("name", "openclaw-todo-debug-apk")
+    browser_link = f"https://github.com/{owner_repo}/actions/runs/{run_id}/artifacts/{artifact.get('id')}"
+    direct_link = resolve_artifact_download_url(artifact.get("archive_download_url", ""), os.environ.get("GITHUB_TOKEN", ""))
+
+    print("[ci] delivery summary")
+    print(f"[ci] run_url={run_url}")
+    print(f"[ci] artifact_name={artifact_name}")
+    print(f"[ci] artifact_id={artifact.get('id')}")
+    print(f"[ci] browser_link={browser_link}")
+    print(f"[ci] direct_link={direct_link}")
+    if apk_info:
+        print(f"[ci] apk_size={apk_info.get('size')} apk_sha256={apk_info.get('sha256')}")
+
+    return {
+        "run_url": run_url,
+        "artifact_name": artifact_name,
+        "artifact_id": artifact.get("id"),
+        "browser_link": browser_link,
+        "direct_link": direct_link,
+        "size": apk_info.get("size") if apk_info else None,
+        "sha256": apk_info.get("sha256") if apk_info else None,
+    }
+
+
+def write_report(payload: Dict):
+    payload = {**payload}
+    payload["updated_at"] = datetime.utcnow().isoformat() + "Z"
+    payload["agent"] = "app-dev"
+    try:
+        with open(REPORT_PATH, "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False, indent=2)
+            f.flush()
+        print(f"[ci] delivery report saved: {REPORT_PATH}")
+    except Exception as e:
+        print(f"[ci] failed to write delivery report: {e}")
+
+
+def fail_fast(message: str):
+    """Write a failure report in case of unexpected exception/termination."""
+    try:
+        write_report({
+            "status": "unexpected",
+            "attempt": 999,
+            "error": message,
+            "run_id": None,
+        })
+    except Exception:
+        pass
 
 
 def send_telegram(message: str):
@@ -530,8 +602,6 @@ def main():
         raise SystemExit("GITHUB_TOKEN missing")
 
     ref = os.environ.get("GITHUB_REF", "master")
-    to_addr = os.environ.get("DELIVERY_EMAIL", "kingjjy.game@gmail.com")
-    gog_account = os.environ.get("GOG_ACCOUNT", to_addr)
 
     retry_count = 0
     print("[ci] start delivery loop: failure retry + delivery validation")
@@ -559,14 +629,31 @@ def main():
                 raise RuntimeError(f"run failed: conclusion={final.get('conclusion')} reason={reason}")
 
             ensure_smoke_pass(owner_repo, run_id, token)
-            zip_path = fetch_artifact(owner_repo, run_id, token)
+            zip_path, artifact = fetch_artifact(owner_repo, run_id, token)
             apk_path = extract_apk(zip_path)
-            validate_apk(apk_path)
+            apk_info = validate_apk(apk_path)
             local_install_verify(apk_path)
 
-            send_mail_with_gog(apk_path, run_url, to_addr, gog_account)
-            msg = f"✅ 앱 빌드 완료\\nRun: {run_url}\\nAPK: openclaw-todo-debug-apk\\n수신: {to_addr}"
+            summary = send_delivery_summary(owner_repo, run_id, run_url, artifact, apk_info)
+
+            msg = f"✅ 앱 빌드 완료\\nRun: {run_url}\\nAPK: {summary['artifact_name']}\\n브라우저 링크: {summary['browser_link']}"
+            if summary.get("direct_link"):
+                msg += f"\n직접링크: {summary['direct_link']}"
+            msg += f"\n크기: {summary.get('size')}\nSHA256: {summary.get('sha256')}"
             send_telegram(msg)
+
+            write_report({
+                "status": "success",
+                "run_id": run_id,
+                "run_url": run_url,
+                "attempt": retry_count + 1,
+                "artifact_name": summary.get("artifact_name"),
+                "artifact_id": summary.get("artifact_id"),
+                "browser_link": summary.get("browser_link"),
+                "direct_link": summary.get("direct_link"),
+                "size": summary.get("size"),
+                "sha256": summary.get("sha256"),
+            })
 
             print(f"[ci] complete: {run_url}")
             print(f"[ci] success after {retry_count + 1} run")
@@ -578,19 +665,44 @@ def main():
                 cancel_run(owner_repo, run_id, token)
             retry_count += 1
             send_telegram(f"⚠️ GitHub run가 5분 이상 정체되어 재시도: retry={retry_count}")
+            write_report({
+                "status": "timeout",
+                "run_id": run_id if 'run_id' in locals() else None,
+                "attempt": retry_count,
+                "error": str(e),
+            })
             print(f"[ci] retrying after timeout (count={retry_count})")
 
         except Exception as e:
             print(f"[ci] run/process failed: {e}")
             retry_count += 1
             send_telegram(f"⚠️ 빌드 실패, 재시도 중({retry_count}): {e}")
+            write_report({
+                "status": "failed",
+                "run_id": run_id if 'run_id' in locals() else None,
+                "attempt": retry_count,
+                "error": str(e),
+            })
             print(f"[ci] retrying... ({retry_count})")
 
         if one_shot:
+            write_report({
+                "status": "one_shot_stopped",
+                "attempt": retry_count,
+                "run_id": run_id if 'run_id' in locals() else None,
+                "error": "one-shot mode configured; stop after one attempt",
+            })
             raise SystemExit(f"[ci] one-shot mode: stop after one attempt ({retry_count})")
 
         time.sleep(min(20, max(5, retry_count * 2)))
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except KeyboardInterrupt:
+        fail_fast("interrupted by user/host")
+        raise
+    except Exception as e:
+        fail_fast(str(e))
+        raise
