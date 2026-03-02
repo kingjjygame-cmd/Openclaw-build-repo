@@ -13,31 +13,39 @@ permissions:
 jobs:
   build-debug-apk:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup JDK 17
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app-android-todo/package-lock.json
+
+      - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
-          cache: gradle
 
-      - name: Validate Gradle wrapper
-        uses: gradle/actions/wrapper-validation@v3
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
 
-      - name: Make gradlew executable
-        run: chmod +x ./gradlew
+      - name: Install dependencies
+        working-directory: app-android-todo
+        run: npm ci
 
-      - name: Assemble Debug APK
-        run: |
-          if [ -f "./app/build.gradle" ] || [ -f "./app/build.gradle.kts" ]; then
-            ./gradlew :app:assembleDebug --stacktrace
-          else
-            ./gradlew assembleDebug --stacktrace
-          fi
+      - name: Generate Android project
+        working-directory: app-android-todo
+        run: npx expo prebuild --platform android --non-interactive
+
+      - name: Build Debug APK
+        working-directory: app-android-todo/android
+        run: ./gradlew :app:assembleDebug --stacktrace --no-daemon
 
       - name: Upload debug APK artifacts
         uses: actions/upload-artifact@v4
@@ -45,5 +53,5 @@ jobs:
           name: debug-apk-${{ github.event.pull_request.number || github.run_number }}
           if-no-files-found: error
           path: |
-            **/build/outputs/apk/debug/*.apk
-            **/build/outputs/apk/*/debug/*.apk
+            app-android-todo/android/app/build/outputs/apk/debug/*.apk
+            app-android-todo/android/app/build/outputs/apk/*/debug/*.apk
