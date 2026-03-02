@@ -34,28 +34,34 @@ class Character {
 
 const int questionCount = 10;
 
-enum SpeedMode { easy, normal, hard }
+enum DifficultyStage { easy, medium, hard }
 
-int secondsForMode(SpeedMode mode) {
-  switch (mode) {
-    case SpeedMode.easy:
-      return 20;
-    case SpeedMode.normal:
-      return 12;
-    case SpeedMode.hard:
-      return 8;
+int secondsForStage(DifficultyStage stage) {
+  switch (stage) {
+    case DifficultyStage.easy:
+      return 15;
+    case DifficultyStage.medium:
+      return 10;
+    case DifficultyStage.hard:
+      return 5;
   }
 }
 
-String speedModeLabel(SpeedMode mode) {
-  switch (mode) {
-    case SpeedMode.easy:
-      return '느림';
-    case SpeedMode.normal:
-      return '보통';
-    case SpeedMode.hard:
-      return '빠름';
+String stageLabel(DifficultyStage stage) {
+  switch (stage) {
+    case DifficultyStage.easy:
+      return 'Easy';
+    case DifficultyStage.medium:
+      return 'Medium';
+    case DifficultyStage.hard:
+      return 'Hard';
   }
+}
+
+DifficultyStage stageForQuestion(int index) {
+  if (index < 3) return DifficultyStage.easy;
+  if (index < 6) return DifficultyStage.medium;
+  return DifficultyStage.hard;
 }
 
 final List<Character> characters = [
@@ -90,8 +96,8 @@ class _QuizPageState extends State<QuizPage> {
   late List<int> _questionIndices;
   int _q = 0;
   int _score = 0;
-  SpeedMode _mode = SpeedMode.normal;
-  int _timeLeft = secondsForMode(SpeedMode.normal);
+  DifficultyStage _stage = DifficultyStage.easy;
+  int _timeLeft = secondsForStage(DifficultyStage.easy);
   Timer? _timer;
   bool _answered = false;
   String? _selectedChoice;
@@ -113,6 +119,7 @@ class _QuizPageState extends State<QuizPage> {
     _timer?.cancel();
     _score = 0;
     _q = 0;
+    _stage = DifficultyStage.easy;
     _questionIndices = List.generate(characters.length, (i) => i)..shuffle(_rand);
     if (_questionIndices.length > questionCount) {
       _questionIndices = _questionIndices.take(questionCount).toList();
@@ -126,7 +133,8 @@ class _QuizPageState extends State<QuizPage> {
   void _loadQuestion() {
     _answered = false;
     _selectedChoice = null;
-    _timeLeft = secondsForMode(_mode);
+    _stage = stageForQuestion(_q);
+    _timeLeft = secondsForStage(_stage);
     final target = characters[_questionIndices[_q]];
     final wrongNames = characters
         .where((c) => c.name != target.name)
@@ -161,12 +169,38 @@ class _QuizPageState extends State<QuizPage> {
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        duration: const Duration(milliseconds: 900),
-        content: Text('시간 초과! 정답은 $answer'),
+        duration: const Duration(milliseconds: 1200),
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: const Color(0xFF455A64),
+        content: Row(
+          children: [
+            const Text('⏰⚡', style: TextStyle(fontSize: 20)),
+            const SizedBox(width: 10),
+            Expanded(child: Text('시간 초과! 정답은 $answer')),
+          ],
+        ),
       ),
     );
 
     Future.delayed(const Duration(milliseconds: 950), _goNext);
+  }
+
+  Future<void> _showStageCountdown(DifficultyStage nextStage) async {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.clearSnackBars();
+
+    for (int i = 3; i >= 1; i--) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(
+          duration: const Duration(milliseconds: 850),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: const Color(0xFF283593),
+          content: Text('다음 단계 ${stageLabel(nextStage)} 시작까지 $i...'),
+        ),
+      );
+      await Future.delayed(const Duration(seconds: 1));
+    }
   }
 
   void _pick(String selected) {
@@ -186,17 +220,17 @@ class _QuizPageState extends State<QuizPage> {
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        duration: const Duration(milliseconds: 1100),
+        duration: const Duration(milliseconds: 1400),
         behavior: SnackBarBehavior.floating,
-        backgroundColor: isCorrect ? const Color(0xFF8E24AA) : const Color(0xFFE53935),
+        backgroundColor: isCorrect ? const Color(0xFF6A1B9A) : const Color(0xFFD81B60),
         content: Row(
           children: [
-            Text(isCorrect ? '🎆✨' : '💥❌', style: const TextStyle(fontSize: 20)),
+            Text(isCorrect ? '🌈🎉✨' : '💣😵‍💫❌', style: const TextStyle(fontSize: 22)),
             const SizedBox(width: 10),
             Expanded(
               child: Text(
-                isCorrect ? '정답! 완전 최고야!' : '땡! 정답은 $answer',
-                style: const TextStyle(fontWeight: FontWeight.bold),
+                isCorrect ? '정답 대폭발! 퍼펙트~!' : '아쉽다! 정답은 $answer',
+                style: const TextStyle(fontWeight: FontWeight.w900),
               ),
             ),
           ],
@@ -207,7 +241,7 @@ class _QuizPageState extends State<QuizPage> {
     Future.delayed(const Duration(milliseconds: 750), _goNext);
   }
 
-  void _goNext() {
+  Future<void> _goNext() async {
     if (!mounted) return;
     if (_q >= questionCount - 1) {
       _timer?.cancel();
@@ -221,9 +255,20 @@ class _QuizPageState extends State<QuizPage> {
       );
       return;
     }
+
+    final currentStage = stageForQuestion(_q);
+    final nextQuestion = _q + 1;
+    final nextStage = stageForQuestion(nextQuestion);
+
     setState(() {
-      _q++;
+      _q = nextQuestion;
     });
+
+    if (currentStage != nextStage) {
+      await _showStageCountdown(nextStage);
+      if (!mounted) return;
+    }
+
     _loadQuestion();
   }
 
@@ -243,32 +288,6 @@ class _QuizPageState extends State<QuizPage> {
       appBar: AppBar(
         title: const Text('티니핑 이름 맞추기'),
         centerTitle: true,
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<SpeedMode>(
-                value: _mode,
-                borderRadius: BorderRadius.circular(12),
-                onChanged: (value) {
-                  if (value == null) return;
-                  setState(() {
-                    _mode = value;
-                    _timeLeft = secondsForMode(_mode);
-                  });
-                },
-                items: SpeedMode.values
-                    .map(
-                      (m) => DropdownMenuItem(
-                        value: m,
-                        child: Text('속도 ${speedModeLabel(m)}'),
-                      ),
-                    )
-                    .toList(),
-              ),
-            ),
-          ),
-        ],
       ),
       body: SafeArea(
         child: LayoutBuilder(
@@ -288,7 +307,7 @@ class _QuizPageState extends State<QuizPage> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text('점수: $_score'),
-                        Text('속도: ${speedModeLabel(_mode)} · $_timeLeft초'),
+                        Text('난이도: ${stageLabel(_stage)} · $_timeLeft초'),
                       ],
                     ),
                     const SizedBox(height: 14),
