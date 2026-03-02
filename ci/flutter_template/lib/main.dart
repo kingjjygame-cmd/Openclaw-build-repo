@@ -36,12 +36,12 @@ const int questionCount = 10;
 const int secondsPerQuestion = 15;
 
 final List<Character> characters = [
-  const Character(name: '하츄핑', assetPath: 'assets/images/hachuping.png'),
-  const Character(name: '차차핑', assetPath: 'assets/images/chachaping.png'),
-  const Character(name: '라라핑', assetPath: 'assets/images/raraping.png'),
-  const Character(name: '아자핑', assetPath: 'assets/images/ajaping.png'),
-  const Character(name: '해핑', assetPath: 'assets/images/haeping.png'),
-  const Character(name: '조아핑', assetPath: 'assets/images/joaping.png'),
+  const Character(name: '하츄핑', assetPath: 'assets/images/hachuping.webp'),
+  const Character(name: '차차핑', assetPath: 'assets/images/chachaping.webp'),
+  const Character(name: '라라핑', assetPath: 'assets/images/raraping.webp'),
+  const Character(name: '아자핑', assetPath: 'assets/images/ajaping.webp'),
+  const Character(name: '해핑', assetPath: 'assets/images/haeping.webp'),
+  const Character(name: '조아핑', assetPath: 'assets/images/joaping.webp'),
 ];
 
 class QuizPage extends StatefulWidget {
