@@ -26,21 +26,21 @@ class TinyPingQuizApp extends StatelessWidget {
 
 class Character {
   final String name;
-  final String imageUrl;
+  final String assetPath;
 
-  const Character({required this.name, required this.imageUrl});
+  const Character({required this.name, required this.assetPath});
 }
 
 const int questionCount = 10;
 const int secondsPerQuestion = 15;
 
 final List<Character> characters = [
-  const Character(name: '하츄핑', imageUrl: 'https://placehold.co/700x500/png?text=Hachuping'),
-  const Character(name: '차차핑', imageUrl: 'https://placehold.co/700x500/png?text=Chachaping'),
-  const Character(name: '라라핑', imageUrl: 'https://placehold.co/700x500/png?text=Raraping'),
-  const Character(name: '아자핑', imageUrl: 'https://placehold.co/700x500/png?text=Ajaping'),
-  const Character(name: '해핑', imageUrl: 'https://placehold.co/700x500/png?text=Haeping'),
-  const Character(name: '조아핑', imageUrl: 'https://placehold.co/700x500/png?text=Joaping'),
+  const Character(name: '하츄핑', assetPath: 'assets/images/hachuping.png'),
+  const Character(name: '차차핑', assetPath: 'assets/images/chachaping.png'),
+  const Character(name: '라라핑', assetPath: 'assets/images/raraping.png'),
+  const Character(name: '아자핑', assetPath: 'assets/images/ajaping.png'),
+  const Character(name: '해핑', assetPath: 'assets/images/haeping.png'),
+  const Character(name: '조아핑', assetPath: 'assets/images/joaping.png'),
 ];
 
 class QuizPage extends StatefulWidget {
@@ -204,17 +204,9 @@ class _QuizPageState extends State<QuizPage> {
                       height: imageHeight,
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(16),
-                        child: Image.network(
-                          current.imageUrl,
+                        child: Image.asset(
+                          current.assetPath,
                           fit: BoxFit.cover,
-                          loadingBuilder: (context, child, loadingProgress) {
-                            if (loadingProgress == null) return child;
-                            return Container(
-                              color: Colors.pink.shade50,
-                              alignment: Alignment.center,
-                              child: const CircularProgressIndicator(),
-                            );
-                          },
                           errorBuilder: (context, error, stackTrace) => Container(
                             color: Colors.pink.shade50,
                             alignment: Alignment.center,
