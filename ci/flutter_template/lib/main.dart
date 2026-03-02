@@ -186,8 +186,21 @@ class _QuizPageState extends State<QuizPage> {
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        duration: const Duration(milliseconds: 700),
-        content: Text(isCorrect ? '정답! 🎉' : '오답! 정답은 $answer'),
+        duration: const Duration(milliseconds: 1100),
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: isCorrect ? const Color(0xFF8E24AA) : const Color(0xFFE53935),
+        content: Row(
+          children: [
+            Text(isCorrect ? '🎆✨' : '💥❌', style: const TextStyle(fontSize: 20)),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                isCorrect ? '정답! 완전 최고야!' : '땡! 정답은 $answer',
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
       ),
     );
 
@@ -203,7 +216,6 @@ class _QuizPageState extends State<QuizPage> {
           builder: (_) => ResultPage(
             score: _score,
             total: questionCount,
-            onRestart: _startNewGame,
           ),
         ),
       );
@@ -330,9 +342,8 @@ class _QuizPageState extends State<QuizPage> {
 class ResultPage extends StatelessWidget {
   final int score;
   final int total;
-  final VoidCallback onRestart;
 
-  const ResultPage({super.key, required this.score, required this.total, required this.onRestart});
+  const ResultPage({super.key, required this.score, required this.total});
 
   @override
   Widget build(BuildContext context) {
@@ -349,11 +360,15 @@ class ResultPage extends StatelessWidget {
               const SizedBox(height: 20),
               FilledButton.icon(
                 onPressed: () {
-                  onRestart();
                   Navigator.of(context).pushReplacement(
                     MaterialPageRoute(builder: (_) => const QuizPage()),
                   );
                 },
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFFFF4FB0),
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size.fromHeight(52),
+                ),
                 icon: const Icon(Icons.replay),
                 label: const Text('다시 하기'),
               ),
