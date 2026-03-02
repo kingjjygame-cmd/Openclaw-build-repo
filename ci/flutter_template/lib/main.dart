@@ -36,22 +36,23 @@ const int questionCount = 10;
 const int secondsPerQuestion = 15;
 
 final List<Character> characters = [
-  const Character(name: '그레이스핑', assetPath: 'assets/images/graceping.png'),
-  const Character(name: '클레어핑', assetPath: 'assets/images/claireping.png'),
-  const Character(name: '보니핑', assetPath: 'assets/images/bonnyping.png'),
-  const Character(name: '다이아나핑', assetPath: 'assets/images/dianaping.png'),
+  const Character(name: '프린세스 하츄핑', assetPath: 'assets/images/hachuping.webp'),
+  const Character(name: '사뿐핑', assetPath: 'assets/images/claireping.png'),
+  const Character(name: '아름핑', assetPath: 'assets/images/graceping.png'),
+  const Character(name: '뽀니핑', assetPath: 'assets/images/bonnyping.png'),
   const Character(name: '이클립스핑', assetPath: 'assets/images/eclipseping.png'),
-  const Character(name: '스크럽핑', assetPath: 'assets/images/scrubping.png'),
+  const Character(name: '다이아나핑', assetPath: 'assets/images/dianaping.png'),
+  const Character(name: '뽀득핑', assetPath: 'assets/images/scrubping.png'),
   const Character(name: '차밍핑', assetPath: 'assets/images/charmingping.png'),
-  const Character(name: '플리터핑', assetPath: 'assets/images/flitterping.png'),
-  const Character(name: '실키핑', assetPath: 'assets/images/silkyping.png'),
+  const Character(name: '나비핑', assetPath: 'assets/images/flitterping.png'),
+  const Character(name: '실크핑', assetPath: 'assets/images/silkyping.png'),
   const Character(name: '스노우핑', assetPath: 'assets/images/snowping.png'),
-  const Character(name: '듀핑', assetPath: 'assets/images/dewping.png'),
-  const Character(name: '도지핑', assetPath: 'assets/images/dozyping.png'),
-  const Character(name: '렐라핑', assetPath: 'assets/images/rellaping.png'),
-  const Character(name: '글로시핑', assetPath: 'assets/images/glossyping.png'),
-  const Character(name: '큐피드핑', assetPath: 'assets/images/cupidping.png'),
-  const Character(name: '키티핑', assetPath: 'assets/images/kittyping.png'),
+  const Character(name: '이슬핑', assetPath: 'assets/images/dewping.png'),
+  const Character(name: '쿨쿨핑', assetPath: 'assets/images/dozyping.png'),
+  const Character(name: '쇼쇼핑', assetPath: 'assets/images/glossyping.png'),
+  const Character(name: '롱롱핑', assetPath: 'assets/images/rellaping.png'),
+  const Character(name: '큐핑', assetPath: 'assets/images/cupidping.png'),
+  const Character(name: '야옹핑', assetPath: 'assets/images/kittyping.png'),
 ];
 
 class QuizPage extends StatefulWidget {
