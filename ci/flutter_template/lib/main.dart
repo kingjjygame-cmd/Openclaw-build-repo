@@ -72,8 +72,8 @@ final List<Character> characters = [
   const Character(name: '스노우핑', assetPath: 'assets/images/snowping.png'),
   const Character(name: '이슬핑', assetPath: 'assets/images/dewping.png'),
   const Character(name: '쿨쿨핑', assetPath: 'assets/images/dozyping.png'),
-  const Character(name: '쇼쇼핑', assetPath: 'assets/images/glossyping.png'),
-  const Character(name: '롱롱핑', assetPath: 'assets/images/rellaping.png'),
+  const Character(name: '롱롱핑', assetPath: 'assets/images/glossyping.png'),
+  const Character(name: '슈슈핑', assetPath: 'assets/images/rellaping.png'),
   const Character(name: '큐핑', assetPath: 'assets/images/cupidping.png'),
   const Character(name: '야옹핑', assetPath: 'assets/images/kittyping.png'),
 ];
