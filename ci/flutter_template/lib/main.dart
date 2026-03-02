@@ -36,12 +36,22 @@ const int questionCount = 10;
 const int secondsPerQuestion = 15;
 
 final List<Character> characters = [
-  const Character(name: '하츄핑', assetPath: 'assets/images/hachuping.webp'),
-  const Character(name: '차차핑', assetPath: 'assets/images/chachaping.webp'),
-  const Character(name: '라라핑', assetPath: 'assets/images/raraping.webp'),
-  const Character(name: '아자핑', assetPath: 'assets/images/ajaping.webp'),
-  const Character(name: '해핑', assetPath: 'assets/images/haeping.webp'),
-  const Character(name: '조아핑', assetPath: 'assets/images/joaping.webp'),
+  const Character(name: '그레이스핑', assetPath: 'assets/images/graceping.png'),
+  const Character(name: '클레어핑', assetPath: 'assets/images/claireping.png'),
+  const Character(name: '보니핑', assetPath: 'assets/images/bonnyping.png'),
+  const Character(name: '다이아나핑', assetPath: 'assets/images/dianaping.png'),
+  const Character(name: '이클립스핑', assetPath: 'assets/images/eclipseping.png'),
+  const Character(name: '스크럽핑', assetPath: 'assets/images/scrubping.png'),
+  const Character(name: '차밍핑', assetPath: 'assets/images/charmingping.png'),
+  const Character(name: '플리터핑', assetPath: 'assets/images/flitterping.png'),
+  const Character(name: '실키핑', assetPath: 'assets/images/silkyping.png'),
+  const Character(name: '스노우핑', assetPath: 'assets/images/snowping.png'),
+  const Character(name: '듀핑', assetPath: 'assets/images/dewping.png'),
+  const Character(name: '도지핑', assetPath: 'assets/images/dozyping.png'),
+  const Character(name: '렐라핑', assetPath: 'assets/images/rellaping.png'),
+  const Character(name: '글로시핑', assetPath: 'assets/images/glossyping.png'),
+  const Character(name: '큐피드핑', assetPath: 'assets/images/cupidping.png'),
+  const Character(name: '키티핑', assetPath: 'assets/images/kittyping.png'),
 ];
 
 class QuizPage extends StatefulWidget {
@@ -205,13 +215,13 @@ class _QuizPageState extends State<QuizPage> {
                       height: imageHeight,
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(16),
-                        child: Image.asset(
-                          current.assetPath,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) => Container(
-                            color: Colors.pink.shade50,
-                            alignment: Alignment.center,
-                            child: Column(
+                        child: Container(
+                          color: Colors.pink.shade50,
+                          alignment: Alignment.center,
+                          child: Image.asset(
+                            current.assetPath,
+                            fit: BoxFit.contain,
+                            errorBuilder: (context, error, stackTrace) => Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
                                 const Icon(Icons.image_not_supported, size: 36),
