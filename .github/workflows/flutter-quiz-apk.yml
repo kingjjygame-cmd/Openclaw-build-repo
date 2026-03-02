@@ -46,13 +46,19 @@ jobs:
           from pathlib import Path
           p = Path('tinyping_quiz/pubspec.yaml')
           s = p.read_text()
-          needle = 'flutter:\n  uses-material-design: true\n'
-          replacement = 'flutter:\n  uses-material-design: true\n  assets:\n    - assets/images/\n'
-          if replacement not in s:
-            s = s.replace(needle, replacement)
+          if '    - assets/images/' not in s:
+            marker = '  uses-material-design: true\n'
+            if marker in s:
+              s = s.replace(marker, marker + '  assets:\n    - assets/images/\n', 1)
+            else:
+              raise SystemExit('pubspec.yaml marker not found: uses-material-design')
           p.write_text(s)
           print('updated pubspec assets section')
           PY
+          echo "--- pubspec assets check ---"
+          grep -n "assets/images" tinyping_quiz/pubspec.yaml
+          echo "--- copied assets check ---"
+          ls -lah tinyping_quiz/assets/images
 
       - name: Build APK (release)
         working-directory: tinyping_quiz
