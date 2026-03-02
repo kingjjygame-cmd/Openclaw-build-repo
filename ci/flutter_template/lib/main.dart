@@ -1,3 +1,4 @@
+// build: asset-bundle-verify-v2
 import 'dart:async';
 import 'dart:math';
 
