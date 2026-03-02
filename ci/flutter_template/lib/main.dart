@@ -33,7 +33,30 @@ class Character {
 }
 
 const int questionCount = 10;
-const int secondsPerQuestion = 15;
+
+enum SpeedMode { easy, normal, hard }
+
+int secondsForMode(SpeedMode mode) {
+  switch (mode) {
+    case SpeedMode.easy:
+      return 20;
+    case SpeedMode.normal:
+      return 12;
+    case SpeedMode.hard:
+      return 8;
+  }
+}
+
+String speedModeLabel(SpeedMode mode) {
+  switch (mode) {
+    case SpeedMode.easy:
+      return '느림';
+    case SpeedMode.normal:
+      return '보통';
+    case SpeedMode.hard:
+      return '빠름';
+  }
+}
 
 final List<Character> characters = [
   const Character(name: '프린세스 하츄핑', assetPath: 'assets/images/hachuping.webp'),
@@ -67,7 +90,8 @@ class _QuizPageState extends State<QuizPage> {
   late List<int> _questionIndices;
   int _q = 0;
   int _score = 0;
-  int _timeLeft = secondsPerQuestion;
+  SpeedMode _mode = SpeedMode.normal;
+  int _timeLeft = secondsForMode(SpeedMode.normal);
   Timer? _timer;
   bool _answered = false;
   String? _selectedChoice;
@@ -102,7 +126,7 @@ class _QuizPageState extends State<QuizPage> {
   void _loadQuestion() {
     _answered = false;
     _selectedChoice = null;
-    _timeLeft = secondsPerQuestion;
+    _timeLeft = secondsForMode(_mode);
     final target = characters[_questionIndices[_q]];
     final wrongNames = characters
         .where((c) => c.name != target.name)
@@ -120,11 +144,29 @@ class _QuizPageState extends State<QuizPage> {
       });
       if (_timeLeft <= 0) {
         timer.cancel();
-        _goNext();
+        _handleTimeout();
       }
     });
 
     setState(() {});
+  }
+
+  void _handleTimeout() {
+    if (_answered) return;
+    final answer = characters[_questionIndices[_q]].name;
+    setState(() {
+      _answered = true;
+      _selectedChoice = null;
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        duration: const Duration(milliseconds: 900),
+        content: Text('시간 초과! 정답은 $answer'),
+      ),
+    );
+
+    Future.delayed(const Duration(milliseconds: 950), _goNext);
   }
 
   void _pick(String selected) {
@@ -189,6 +231,32 @@ class _QuizPageState extends State<QuizPage> {
       appBar: AppBar(
         title: const Text('티니핑 이름 맞추기'),
         centerTitle: true,
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<SpeedMode>(
+                value: _mode,
+                borderRadius: BorderRadius.circular(12),
+                onChanged: (value) {
+                  if (value == null) return;
+                  setState(() {
+                    _mode = value;
+                    _timeLeft = secondsForMode(_mode);
+                  });
+                },
+                items: SpeedMode.values
+                    .map(
+                      (m) => DropdownMenuItem(
+                        value: m,
+                        child: Text('속도 ${speedModeLabel(m)}'),
+                      ),
+                    )
+                    .toList(),
+              ),
+            ),
+          ),
+        ],
       ),
       body: SafeArea(
         child: LayoutBuilder(
@@ -208,7 +276,7 @@ class _QuizPageState extends State<QuizPage> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text('점수: $_score'),
-                        Text('남은 시간: $_timeLeft초'),
+                        Text('속도: ${speedModeLabel(_mode)} · $_timeLeft초'),
                       ],
                     ),
                     const SizedBox(height: 14),
