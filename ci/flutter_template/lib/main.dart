@@ -35,12 +35,12 @@ const int questionCount = 10;
 const int secondsPerQuestion = 15;
 
 final List<Character> characters = [
-  const Character(name: '하츄핑', imageUrl: 'https://picsum.photos/seed/hachuping/700/500'),
-  const Character(name: '차차핑', imageUrl: 'https://picsum.photos/seed/chachaping/700/500'),
-  const Character(name: '라라핑', imageUrl: 'https://picsum.photos/seed/raraping/700/500'),
-  const Character(name: '아자핑', imageUrl: 'https://picsum.photos/seed/ajaping/700/500'),
-  const Character(name: '해핑', imageUrl: 'https://picsum.photos/seed/haeping/700/500'),
-  const Character(name: '조아핑', imageUrl: 'https://picsum.photos/seed/joaping/700/500'),
+  const Character(name: '하츄핑', imageUrl: 'https://placehold.co/700x500/png?text=Hachuping'),
+  const Character(name: '차차핑', imageUrl: 'https://placehold.co/700x500/png?text=Chachaping'),
+  const Character(name: '라라핑', imageUrl: 'https://placehold.co/700x500/png?text=Raraping'),
+  const Character(name: '아자핑', imageUrl: 'https://placehold.co/700x500/png?text=Ajaping'),
+  const Character(name: '해핑', imageUrl: 'https://placehold.co/700x500/png?text=Haeping'),
+  const Character(name: '조아핑', imageUrl: 'https://placehold.co/700x500/png?text=Joaping'),
 ];
 
 class QuizPage extends StatefulWidget {
@@ -58,6 +58,7 @@ class _QuizPageState extends State<QuizPage> {
   int _timeLeft = secondsPerQuestion;
   Timer? _timer;
   bool _answered = false;
+  String? _selectedChoice;
   List<String> _choices = [];
 
   @override
@@ -88,6 +89,7 @@ class _QuizPageState extends State<QuizPage> {
 
   void _loadQuestion() {
     _answered = false;
+    _selectedChoice = null;
     _timeLeft = secondsPerQuestion;
     final target = characters[_questionIndices[_q]];
     final wrongNames = characters
@@ -115,12 +117,17 @@ class _QuizPageState extends State<QuizPage> {
 
   void _pick(String selected) {
     if (_answered) return;
-    _answered = true;
     final answer = characters[_questionIndices[_q]].name;
     final isCorrect = selected == answer;
-    if (isCorrect) {
-      _score++;
-    }
+
+    setState(() {
+      _answered = true;
+      _selectedChoice = selected;
+      if (isCorrect) {
+        _score++;
+      }
+    });
+
     _timer?.cancel();
 
     ScaffoldMessenger.of(context).showSnackBar(
@@ -157,51 +164,91 @@ class _QuizPageState extends State<QuizPage> {
   @override
   Widget build(BuildContext context) {
     final current = characters[_questionIndices[_q]];
+    final answer = current.name;
+
+    Color? buttonBg(String choice) {
+      if (!_answered || _selectedChoice == null) return null;
+      if (choice == answer) return Colors.green;
+      if (choice == _selectedChoice) return Colors.red;
+      return Colors.grey.shade500;
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('티니핑 이름 맞추기'),
         centerTitle: true,
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text('문제 ${_q + 1} / $questionCount', style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 8),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text('점수: $_score'),
-                Text('남은 시간: $_timeLeft초'),
-              ],
-            ),
-            const SizedBox(height: 14),
-            Expanded(
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(16),
-                child: Image.network(
-                  current.imageUrl,
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) => Container(
-                    color: Colors.pink.shade50,
-                    alignment: Alignment.center,
-                    child: const Text('이미지 로드 실패'),
-                  ),
+      body: SafeArea(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final imageHeight = (constraints.maxHeight * 0.38).clamp(180.0, 280.0);
+
+            return SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minHeight: constraints.maxHeight - 28),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text('문제 ${_q + 1} / $questionCount', style: Theme.of(context).textTheme.titleMedium),
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('점수: $_score'),
+                        Text('남은 시간: $_timeLeft초'),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    SizedBox(
+                      height: imageHeight,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(16),
+                        child: Image.network(
+                          current.imageUrl,
+                          fit: BoxFit.cover,
+                          loadingBuilder: (context, child, loadingProgress) {
+                            if (loadingProgress == null) return child;
+                            return Container(
+                              color: Colors.pink.shade50,
+                              alignment: Alignment.center,
+                              child: const CircularProgressIndicator(),
+                            );
+                          },
+                          errorBuilder: (context, error, stackTrace) => Container(
+                            color: Colors.pink.shade50,
+                            alignment: Alignment.center,
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(Icons.image_not_supported, size: 36),
+                                const SizedBox(height: 8),
+                                Text('${current.name} (이미지 로드 실패)'),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    ..._choices.map(
+                      (c) => Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: FilledButton(
+                          onPressed: _answered ? null : () => _pick(c),
+                          style: FilledButton.styleFrom(
+                            minimumSize: const Size.fromHeight(50),
+                            backgroundColor: buttonBg(c),
+                          ),
+                          child: Text(c),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ),
-            const SizedBox(height: 16),
-            ..._choices.map(
-              (c) => Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: FilledButton(
-                  onPressed: () => _pick(c),
-                  child: Text(c),
-                ),
-              ),
-            ),
-          ],
+            );
+          },
         ),
       ),
     );
