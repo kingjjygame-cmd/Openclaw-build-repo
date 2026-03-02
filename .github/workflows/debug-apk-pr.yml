@@ -1,4 +1,4 @@
-name: Build Debug APK (PR)
+name: Build APK (PR)
 
 on:
   pull_request:
@@ -11,7 +11,7 @@ permissions:
   contents: read
 
 jobs:
-  build-debug-apk:
+  build-apk:
     runs-on: ubuntu-latest
     timeout-minutes: 60
 
@@ -43,15 +43,23 @@ jobs:
         working-directory: app-android-todo
         run: npx expo prebuild --platform android --non-interactive
 
-      - name: Build Debug APK
+      - name: Build Release APK (bundled JS)
         working-directory: app-android-todo/android
-        run: ./gradlew :app:assembleDebug --stacktrace --no-daemon
+        run: |
+          set -euo pipefail
+          if ./gradlew help -q --task :app:bundleReleaseJsAndAssets > /dev/null 2>&1; then
+            ./gradlew --no-daemon :app:bundleReleaseJsAndAssets :app:assembleRelease --stacktrace
+          elif ./gradlew help -q --task :app:createBundleReleaseJsAndAssets > /dev/null 2>&1; then
+            ./gradlew --no-daemon :app:createBundleReleaseJsAndAssets :app:assembleRelease --stacktrace
+          else
+            ./gradlew --no-daemon :app:assembleRelease --stacktrace
+          fi
 
-      - name: Upload debug APK artifacts
+      - name: Upload release APK artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: debug-apk-${{ github.event.pull_request.number || github.run_number }}
+          name: release-apk-${{ github.event.pull_request.number || github.run_number }}
           if-no-files-found: error
           path: |
-            app-android-todo/android/app/build/outputs/apk/debug/*.apk
-            app-android-todo/android/app/build/outputs/apk/*/debug/*.apk
+            app-android-todo/android/app/build/outputs/apk/release/*.apk
+            app-android-todo/android/app/build/outputs/apk/*/release/*.apk
