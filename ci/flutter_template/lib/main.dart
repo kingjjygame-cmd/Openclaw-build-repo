@@ -20,7 +20,7 @@ class TinyPingQuizApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFFFF6FB7)),
         useMaterial3: true,
       ),
-      home: const QuizPage(),
+      home: const StartPage(),
     );
   }
 }
@@ -39,11 +39,11 @@ enum DifficultyStage { easy, medium, hard }
 int secondsForStage(DifficultyStage stage) {
   switch (stage) {
     case DifficultyStage.easy:
-      return 15;
-    case DifficultyStage.medium:
       return 10;
-    case DifficultyStage.hard:
+    case DifficultyStage.medium:
       return 5;
+    case DifficultyStage.hard:
+      return 3;
   }
 }
 
@@ -88,6 +88,59 @@ final List<Character> characters = [
   const Character(name: '큐핑', assetPath: 'assets/images/cupidping.png'),
   const Character(name: '야옹핑', assetPath: 'assets/images/kittyping.png'),
 ];
+
+class StartPage extends StatelessWidget {
+  const StartPage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFFFF9ED2), Color(0xFFB39DDB)],
+          ),
+        ),
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Text('🩷 티니핑 퀴즈', style: TextStyle(fontSize: 40, fontWeight: FontWeight.w900, color: Colors.white)),
+                const SizedBox(height: 12),
+                const Text(
+                  'Easy 10초 → Medium 5초 → Hard 3초',
+                  style: TextStyle(fontSize: 18, color: Colors.white),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 26),
+                FilledButton.icon(
+                  onPressed: () {
+                    Navigator.of(context).pushReplacement(
+                      MaterialPageRoute(builder: (_) => const QuizPage()),
+                    );
+                  },
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFFEC407A),
+                    foregroundColor: Colors.white,
+                    minimumSize: const Size.fromHeight(56),
+                  ),
+                  icon: const Icon(Icons.play_arrow),
+                  label: const Text('게임 시작하기', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 class QuizPage extends StatefulWidget {
   const QuizPage({super.key});
@@ -182,7 +235,7 @@ class _QuizPageState extends State<QuizPage> {
       } else if (isCorrect) {
         _reactionColor = const Color(0xFF7B1FA2);
         _reactionEmoji = '🌈🎉✨';
-        _reactionText = '정답 대폭발! 퍼펙트!';
+        _reactionText = '정답!';
       } else {
         _reactionColor = const Color(0xFFC2185B);
         _reactionEmoji = '💣😵‍💫❌';
