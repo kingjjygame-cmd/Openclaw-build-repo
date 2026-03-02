@@ -32,7 +32,7 @@ class Character {
   const Character({required this.name, required this.assetPath});
 }
 
-const int questionCount = 10;
+const int questionsPerStage = 10;
 
 enum DifficultyStage { easy, medium, hard }
 
@@ -58,10 +58,15 @@ String stageLabel(DifficultyStage stage) {
   }
 }
 
-DifficultyStage stageForQuestion(int index) {
-  if (index < 3) return DifficultyStage.easy;
-  if (index < 6) return DifficultyStage.medium;
-  return DifficultyStage.hard;
+DifficultyStage? nextStage(DifficultyStage stage) {
+  switch (stage) {
+    case DifficultyStage.easy:
+      return DifficultyStage.medium;
+    case DifficultyStage.medium:
+      return DifficultyStage.hard;
+    case DifficultyStage.hard:
+      return null;
+  }
 }
 
 final List<Character> characters = [
@@ -94,14 +99,21 @@ class QuizPage extends StatefulWidget {
 class _QuizPageState extends State<QuizPage> {
   final _rand = Random();
   late List<int> _questionIndices;
-  int _q = 0;
-  int _score = 0;
+
   DifficultyStage _stage = DifficultyStage.easy;
+  int _qInStage = 0;
+  int _totalScore = 0;
+
   int _timeLeft = secondsForStage(DifficultyStage.easy);
   Timer? _timer;
   bool _answered = false;
   String? _selectedChoice;
   List<String> _choices = [];
+
+  bool _showReaction = false;
+  Color _reactionColor = Colors.purple;
+  String _reactionEmoji = '';
+  String _reactionText = '';
 
   @override
   void initState() {
@@ -115,41 +127,38 @@ class _QuizPageState extends State<QuizPage> {
     super.dispose();
   }
 
-  void _startNewGame() {
-    _timer?.cancel();
-    _score = 0;
-    _q = 0;
-    _stage = DifficultyStage.easy;
+  void _prepareStageQuestions() {
     _questionIndices = List.generate(characters.length, (i) => i)..shuffle(_rand);
-    if (_questionIndices.length > questionCount) {
-      _questionIndices = _questionIndices.take(questionCount).toList();
+    if (_questionIndices.length > questionsPerStage) {
+      _questionIndices = _questionIndices.take(questionsPerStage).toList();
     }
-    while (_questionIndices.length < questionCount) {
+    while (_questionIndices.length < questionsPerStage) {
       _questionIndices.add(_rand.nextInt(characters.length));
     }
+  }
+
+  void _startNewGame() {
+    _timer?.cancel();
+    _stage = DifficultyStage.easy;
+    _qInStage = 0;
+    _totalScore = 0;
+    _prepareStageQuestions();
     _loadQuestion();
   }
 
   void _loadQuestion() {
     _answered = false;
     _selectedChoice = null;
-    _stage = stageForQuestion(_q);
     _timeLeft = secondsForStage(_stage);
-    final target = characters[_questionIndices[_q]];
-    final wrongNames = characters
-        .where((c) => c.name != target.name)
-        .map((c) => c.name)
-        .toList()
-      ..shuffle(_rand);
 
+    final target = characters[_questionIndices[_qInStage]];
+    final wrongNames = characters.where((c) => c.name != target.name).map((c) => c.name).toList()..shuffle(_rand);
     _choices = [target.name, wrongNames[0], wrongNames[1]]..shuffle(_rand);
 
     _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (!mounted) return;
-      setState(() {
-        _timeLeft--;
-      });
+      setState(() => _timeLeft--);
       if (_timeLeft <= 0) {
         timer.cancel();
         _handleTimeout();
@@ -159,122 +168,103 @@ class _QuizPageState extends State<QuizPage> {
     setState(() {});
   }
 
-  void _handleTimeout() {
+  Future<void> _showFullscreenReaction({
+    required bool isCorrect,
+    String? answer,
+    bool isTimeout = false,
+  }) async {
+    setState(() {
+      _showReaction = true;
+      if (isTimeout) {
+        _reactionColor = const Color(0xFF37474F);
+        _reactionEmoji = '⏰⚡';
+        _reactionText = '시간 초과! 정답은 $answer';
+      } else if (isCorrect) {
+        _reactionColor = const Color(0xFF7B1FA2);
+        _reactionEmoji = '🌈🎉✨';
+        _reactionText = '정답 대폭발! 퍼펙트!';
+      } else {
+        _reactionColor = const Color(0xFFC2185B);
+        _reactionEmoji = '💣😵‍💫❌';
+        _reactionText = '아쉽다! 정답은 $answer';
+      }
+    });
+
+    await Future.delayed(const Duration(milliseconds: 950));
+    if (!mounted) return;
+    setState(() => _showReaction = false);
+  }
+
+  Future<void> _handleTimeout() async {
     if (_answered) return;
-    final answer = characters[_questionIndices[_q]].name;
+    final answer = characters[_questionIndices[_qInStage]].name;
     setState(() {
       _answered = true;
       _selectedChoice = null;
     });
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        duration: const Duration(milliseconds: 1200),
-        behavior: SnackBarBehavior.floating,
-        backgroundColor: const Color(0xFF455A64),
-        content: Row(
-          children: [
-            const Text('⏰⚡', style: TextStyle(fontSize: 20)),
-            const SizedBox(width: 10),
-            Expanded(child: Text('시간 초과! 정답은 $answer')),
-          ],
-        ),
-      ),
-    );
-
-    Future.delayed(const Duration(milliseconds: 950), _goNext);
+    await _showFullscreenReaction(isCorrect: false, answer: answer, isTimeout: true);
+    await _goNext();
   }
 
-  Future<void> _showStageCountdown(DifficultyStage nextStage) async {
-    final messenger = ScaffoldMessenger.of(context);
-    messenger.clearSnackBars();
-
-    for (int i = 3; i >= 1; i--) {
-      if (!mounted) return;
-      messenger.showSnackBar(
-        SnackBar(
-          duration: const Duration(milliseconds: 850),
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: const Color(0xFF283593),
-          content: Text('다음 단계 ${stageLabel(nextStage)} 시작까지 $i...'),
-        ),
-      );
-      await Future.delayed(const Duration(seconds: 1));
-    }
-  }
-
-  void _pick(String selected) {
+  Future<void> _pick(String selected) async {
     if (_answered) return;
-    final answer = characters[_questionIndices[_q]].name;
+    final answer = characters[_questionIndices[_qInStage]].name;
     final isCorrect = selected == answer;
 
     setState(() {
       _answered = true;
       _selectedChoice = selected;
-      if (isCorrect) {
-        _score++;
-      }
+      if (isCorrect) _totalScore++;
     });
 
     _timer?.cancel();
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        duration: const Duration(milliseconds: 1400),
-        behavior: SnackBarBehavior.floating,
-        backgroundColor: isCorrect ? const Color(0xFF6A1B9A) : const Color(0xFFD81B60),
-        content: Row(
-          children: [
-            Text(isCorrect ? '🌈🎉✨' : '💣😵‍💫❌', style: const TextStyle(fontSize: 22)),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                isCorrect ? '정답 대폭발! 퍼펙트~!' : '아쉽다! 정답은 $answer',
-                style: const TextStyle(fontWeight: FontWeight.w900),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-
-    Future.delayed(const Duration(milliseconds: 750), _goNext);
+    await _showFullscreenReaction(isCorrect: isCorrect, answer: answer);
+    await _goNext();
   }
 
   Future<void> _goNext() async {
     if (!mounted) return;
-    if (_q >= questionCount - 1) {
-      _timer?.cancel();
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(
-          builder: (_) => ResultPage(
-            score: _score,
-            total: questionCount,
+
+    if (_qInStage >= questionsPerStage - 1) {
+      final upcoming = nextStage(_stage);
+      if (upcoming == null) {
+        _timer?.cancel();
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (_) => ResultPage(
+              score: _totalScore,
+              total: questionsPerStage * 3,
+            ),
           ),
+        );
+        return;
+      }
+
+      final proceed = await Navigator.of(context).push<bool>(
+        MaterialPageRoute(
+          builder: (_) => StageTransitionPage(from: _stage, to: upcoming),
         ),
       );
+
+      if (!mounted || proceed != true) return;
+
+      setState(() {
+        _stage = upcoming;
+        _qInStage = 0;
+      });
+      _prepareStageQuestions();
+      _loadQuestion();
       return;
     }
 
-    final currentStage = stageForQuestion(_q);
-    final nextQuestion = _q + 1;
-    final nextStage = stageForQuestion(nextQuestion);
-
-    setState(() {
-      _q = nextQuestion;
-    });
-
-    if (currentStage != nextStage) {
-      await _showStageCountdown(nextStage);
-      if (!mounted) return;
-    }
-
+    setState(() => _qInStage++);
     _loadQuestion();
   }
 
   @override
   Widget build(BuildContext context) {
-    final current = characters[_questionIndices[_q]];
+    final current = characters[_questionIndices[_qInStage]];
     final answer = current.name;
 
     Color? buttonBg(String choice) {
@@ -289,69 +279,177 @@ class _QuizPageState extends State<QuizPage> {
         title: const Text('티니핑 이름 맞추기'),
         centerTitle: true,
       ),
-      body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final imageHeight = (constraints.maxHeight * 0.38).clamp(180.0, 280.0);
+      body: Stack(
+        children: [
+          SafeArea(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final imageHeight = (constraints.maxHeight * 0.38).clamp(180.0, 280.0);
 
-            return SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-              child: ConstrainedBox(
-                constraints: BoxConstraints(minHeight: constraints.maxHeight - 28),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text('문제 ${_q + 1} / $questionCount', style: Theme.of(context).textTheme.titleMedium),
-                    const SizedBox(height: 8),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                return SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(minHeight: constraints.maxHeight - 28),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        Text('점수: $_score'),
-                        Text('난이도: ${stageLabel(_stage)} · $_timeLeft초'),
-                      ],
-                    ),
-                    const SizedBox(height: 14),
-                    SizedBox(
-                      height: imageHeight,
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(16),
-                        child: Container(
-                          color: Colors.pink.shade50,
-                          alignment: Alignment.center,
-                          child: Image.asset(
-                            current.assetPath,
-                            fit: BoxFit.contain,
-                            errorBuilder: (context, error, stackTrace) => Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                const Icon(Icons.image_not_supported, size: 36),
-                                const SizedBox(height: 8),
-                                Text('${current.name} (이미지 로드 실패)'),
-                              ],
+                        Text(
+                          '${stageLabel(_stage)} · 문제 ${_qInStage + 1} / $questionsPerStage',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text('총점: $_totalScore'),
+                            Text('제한 시간: $_timeLeft초'),
+                          ],
+                        ),
+                        const SizedBox(height: 14),
+                        SizedBox(
+                          height: imageHeight,
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(16),
+                            child: Container(
+                              color: Colors.pink.shade50,
+                              alignment: Alignment.center,
+                              child: Image.asset(
+                                current.assetPath,
+                                fit: BoxFit.contain,
+                                errorBuilder: (context, error, stackTrace) => Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    const Icon(Icons.image_not_supported, size: 36),
+                                    const SizedBox(height: 8),
+                                    Text('${current.name} (이미지 로드 실패)'),
+                                  ],
+                                ),
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    ..._choices.map(
-                      (c) => Padding(
-                        padding: const EdgeInsets.only(bottom: 10),
-                        child: FilledButton(
-                          onPressed: _answered ? null : () => _pick(c),
-                          style: FilledButton.styleFrom(
-                            minimumSize: const Size.fromHeight(50),
-                            backgroundColor: buttonBg(c),
+                        const SizedBox(height: 16),
+                        ..._choices.map(
+                          (c) => Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
+                            child: FilledButton(
+                              onPressed: _answered ? null : () => _pick(c),
+                              style: FilledButton.styleFrom(
+                                minimumSize: const Size.fromHeight(50),
+                                backgroundColor: buttonBg(c),
+                              ),
+                              child: Text(c),
+                            ),
                           ),
-                          child: Text(c),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          AnimatedOpacity(
+            opacity: _showReaction ? 1 : 0,
+            duration: const Duration(milliseconds: 180),
+            child: IgnorePointer(
+              ignoring: !_showReaction,
+              child: Container(
+                color: _reactionColor.withOpacity(0.82),
+                width: double.infinity,
+                height: double.infinity,
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(_reactionEmoji, style: const TextStyle(fontSize: 56)),
+                      const SizedBox(height: 14),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 24),
+                        child: Text(
+                          _reactionText,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 26,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
-            );
-          },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class StageTransitionPage extends StatefulWidget {
+  final DifficultyStage from;
+  final DifficultyStage to;
+
+  const StageTransitionPage({super.key, required this.from, required this.to});
+
+  @override
+  State<StageTransitionPage> createState() => _StageTransitionPageState();
+}
+
+class _StageTransitionPageState extends State<StageTransitionPage> {
+  int _count = 3;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) return;
+      if (_count == 1) {
+        timer.cancel();
+        Navigator.of(context).pop(true);
+        return;
+      }
+      setState(() => _count--);
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFF7E57C2), Color(0xFFEC407A)],
+          ),
+        ),
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('LEVEL UP!', style: TextStyle(color: Colors.white, fontSize: 44, fontWeight: FontWeight.w900)),
+              const SizedBox(height: 12),
+              Text(
+                '${stageLabel(widget.from)} 완료\n${stageLabel(widget.to)} 시작!',
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 24),
+              Text('$_count', style: const TextStyle(color: Colors.white, fontSize: 72, fontWeight: FontWeight.bold)),
+            ],
+          ),
         ),
       ),
     );
@@ -375,7 +473,7 @@ class ResultPage extends StatelessWidget {
             children: [
               const Text('게임 종료!', style: TextStyle(fontSize: 30, fontWeight: FontWeight.bold)),
               const SizedBox(height: 14),
-              Text('점수: $score / $total', style: const TextStyle(fontSize: 22)),
+              Text('최종 점수: $score / $total', style: const TextStyle(fontSize: 22)),
               const SizedBox(height: 20),
               FilledButton.icon(
                 onPressed: () {
