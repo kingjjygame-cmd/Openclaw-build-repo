@@ -36,6 +36,7 @@ class Character {
 const int questionsPerStage = 10;
 
 enum QuizMode { unlimited, timed }
+enum StageFlow { singleDifficulty, allDifficulties }
 
 enum DifficultyStage { easy, medium, hard }
 
@@ -106,6 +107,87 @@ final List<Character> characters = [
 class StartPage extends StatelessWidget {
   const StartPage({super.key});
 
+  Future<void> _startSingleDifficulty(BuildContext context, QuizMode mode) async {
+    final selected = await showModalBottomSheet<DifficultyStage>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: DifficultyStage.values
+              .map(
+                (stage) => ListTile(
+                  leading: const Icon(Icons.adjust),
+                  title: Text('${stageLabel(stage)}만 플레이'),
+                  onTap: () => Navigator.of(context).pop(stage),
+                ),
+              )
+              .toList(),
+        ),
+      ),
+    );
+
+    if (selected == null || !context.mounted) return;
+
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (_) => QuizPage(
+          mode: mode,
+          flow: StageFlow.singleDifficulty,
+          fixedStage: selected,
+        ),
+      ),
+    );
+  }
+
+  void _startAllDifficulties(BuildContext context, QuizMode mode) {
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (_) => QuizPage(
+          mode: mode,
+          flow: StageFlow.allDifficulties,
+          fixedStage: null,
+        ),
+      ),
+    );
+  }
+
+  Widget _modeCard(BuildContext context, {required QuizMode mode, required Color color, required IconData icon, required String title, required String subtitle}) {
+    return Card(
+      elevation: 8,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Icon(icon, color: color),
+                const SizedBox(width: 8),
+                Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(subtitle, style: const TextStyle(color: Colors.black54)),
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              onPressed: () => _startSingleDifficulty(context, mode),
+              icon: const Icon(Icons.tune),
+              label: const Text('난이도 하나만 플레이'),
+            ),
+            const SizedBox(height: 8),
+            FilledButton.icon(
+              onPressed: () => _startAllDifficulties(context, mode),
+              style: FilledButton.styleFrom(backgroundColor: color, foregroundColor: Colors.white),
+              icon: const Icon(Icons.rocket_launch),
+              label: const Text('Easy → Hard 전체 플레이'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -121,48 +203,37 @@ class StartPage extends StatelessWidget {
         ),
         child: SafeArea(
           child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Text('🩷 티니핑 퀴즈', style: TextStyle(fontSize: 40, fontWeight: FontWeight.w900, color: Colors.white)),
-                const SizedBox(height: 12),
-                const Text(
-                  '원하는 모드를 선택해 주세요\n(일부만 보고 맞추기: 일부 공개 후 정답 선택 시 전체 공개)',
-                  style: TextStyle(fontSize: 18, color: Colors.white),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 26),
-                FilledButton.icon(
-                  onPressed: () {
-                    Navigator.of(context).pushReplacement(
-                      MaterialPageRoute(builder: (_) => const QuizPage(mode: QuizMode.unlimited)),
-                    );
-                  },
-                  style: FilledButton.styleFrom(
-                    backgroundColor: const Color(0xFF5E35B1),
-                    foregroundColor: Colors.white,
-                    minimumSize: const Size.fromHeight(56),
+            padding: const EdgeInsets.all(20),
+            child: SingleChildScrollView(
+              child: Column(
+                children: [
+                  const SizedBox(height: 8),
+                  const Text('🩷 티니핑 퀴즈', style: TextStyle(fontSize: 38, fontWeight: FontWeight.w900, color: Colors.white)),
+                  const SizedBox(height: 10),
+                  const Text(
+                    '플레이 방식과 진행 모드를 골라주세요',
+                    style: TextStyle(fontSize: 17, color: Colors.white),
+                    textAlign: TextAlign.center,
                   ),
-                  icon: const Icon(Icons.all_inclusive),
-                  label: const Text('일부만 보고 맞추기', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                ),
-                const SizedBox(height: 12),
-                FilledButton.icon(
-                  onPressed: () {
-                    Navigator.of(context).pushReplacement(
-                      MaterialPageRoute(builder: (_) => const QuizPage(mode: QuizMode.timed)),
-                    );
-                  },
-                  style: FilledButton.styleFrom(
-                    backgroundColor: const Color(0xFFEC407A),
-                    foregroundColor: Colors.white,
-                    minimumSize: const Size.fromHeight(56),
+                  const SizedBox(height: 18),
+                  _modeCard(
+                    context,
+                    mode: QuizMode.unlimited,
+                    color: const Color(0xFF5E35B1),
+                    icon: Icons.visibility,
+                    title: '일부만 보고 맞추기',
+                    subtitle: '원형으로 일부만 보여주고 맞히는 모드',
                   ),
-                  icon: const Icon(Icons.timer),
-                  label: const Text('빨리 맞추기 (10/5/3초)', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                ),
-              ],
+                  _modeCard(
+                    context,
+                    mode: QuizMode.timed,
+                    color: const Color(0xFFEC407A),
+                    icon: Icons.timer,
+                    title: '빨리 맞추기',
+                    subtitle: '시간(10/5/3초) 안에 빠르게 맞히는 모드',
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -173,8 +244,15 @@ class StartPage extends StatelessWidget {
 
 class QuizPage extends StatefulWidget {
   final QuizMode mode;
+  final StageFlow flow;
+  final DifficultyStage? fixedStage;
 
-  const QuizPage({super.key, required this.mode});
+  const QuizPage({
+    super.key,
+    required this.mode,
+    required this.flow,
+    required this.fixedStage,
+  });
 
   @override
   State<QuizPage> createState() => _QuizPageState();
@@ -249,7 +327,7 @@ class _QuizPageState extends State<QuizPage> {
 
   void _startNewGame() {
     _timer?.cancel();
-    _stage = DifficultyStage.easy;
+    _stage = widget.fixedStage ?? DifficultyStage.easy;
     _qInStage = 0;
     _totalScore = 0;
     _prepareStageQuestions();
@@ -356,15 +434,19 @@ class _QuizPageState extends State<QuizPage> {
     if (!mounted) return;
 
     if (_qInStage >= questionsPerStage - 1) {
-      final upcoming = nextStage(_stage);
+      final isSingleFlow = widget.flow == StageFlow.singleDifficulty;
+      final upcoming = isSingleFlow ? null : nextStage(_stage);
       if (upcoming == null) {
         _timer?.cancel();
+        final totalQuestions = isSingleFlow ? questionsPerStage : questionsPerStage * 3;
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(
             builder: (_) => ResultPage(
               score: _totalScore,
-              total: questionsPerStage * 3,
+              total: totalQuestions,
               mode: widget.mode,
+              flow: widget.flow,
+              fixedStage: widget.fixedStage,
             ),
           ),
         );
@@ -392,6 +474,39 @@ class _QuizPageState extends State<QuizPage> {
     _loadQuestion();
   }
 
+  String _modeTitle() {
+    return widget.mode == QuizMode.timed ? '빨리 맞추기' : '일부만 보고 맞추기';
+  }
+
+  String _flowTitle() {
+    if (widget.flow == StageFlow.singleDifficulty) {
+      return '${stageLabel(widget.fixedStage!)} 단일';
+    }
+    return 'Easy→Hard 전체';
+  }
+
+  Future<void> _goHome() async {
+    final shouldGo = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('초기 화면으로 이동할까요?'),
+        content: const Text('현재 진행 중인 게임은 종료됩니다.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('취소')),
+          FilledButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('이동')),
+        ],
+      ),
+    );
+
+    if (shouldGo == true && mounted) {
+      _timer?.cancel();
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const StartPage()),
+        (route) => false,
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final current = characters[_questionIndices[_qInStage]];
@@ -406,8 +521,15 @@ class _QuizPageState extends State<QuizPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.mode == QuizMode.timed ? '티니핑 이름 맞추기 · 빨리 맞추기' : '티니핑 이름 맞추기 · 일부만 보고 맞추기'),
+        title: Text('티니핑 이름 맞추기 · ${_modeTitle()}'),
         centerTitle: true,
+        actions: [
+          IconButton(
+            tooltip: '처음으로',
+            onPressed: _goHome,
+            icon: const Icon(Icons.home_rounded),
+          ),
+        ],
       ),
       body: Stack(
         children: [
@@ -432,7 +554,7 @@ class _QuizPageState extends State<QuizPage> {
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Text('총점: $_totalScore'),
-                            Text(widget.mode == QuizMode.timed ? '제한 시간: $_timeLeft초' : '진행 방식: 일부만 보고 맞추기'),
+                            Text(widget.mode == QuizMode.timed ? '제한 시간: $_timeLeft초' : _flowTitle()),
                           ],
                         ),
                         const SizedBox(height: 14),
@@ -697,37 +819,100 @@ class ResultPage extends StatelessWidget {
   final int score;
   final int total;
   final QuizMode mode;
+  final StageFlow flow;
+  final DifficultyStage? fixedStage;
 
-  const ResultPage({super.key, required this.score, required this.total, required this.mode});
+  const ResultPage({
+    super.key,
+    required this.score,
+    required this.total,
+    required this.mode,
+    required this.flow,
+    required this.fixedStage,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final rate = score / total;
+    final grade = rate >= 0.9
+        ? 'S'
+        : rate >= 0.75
+            ? 'A'
+            : rate >= 0.6
+                ? 'B'
+                : 'C';
+
     return Scaffold(
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Text('게임 종료!', style: TextStyle(fontSize: 30, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 14),
-              Text('최종 점수: $score / $total', style: const TextStyle(fontSize: 22)),
-              const SizedBox(height: 20),
-              FilledButton.icon(
-                onPressed: () {
-                  Navigator.of(context).pushReplacement(
-                    MaterialPageRoute(builder: (_) => QuizPage(mode: mode)),
-                  );
-                },
-                style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xFFFF4FB0),
-                  foregroundColor: Colors.white,
-                  minimumSize: const Size.fromHeight(52),
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFF7E57C2), Color(0xFFFF5DA2)],
+          ),
+        ),
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Text('🎊 게임 완료! 🎊', style: TextStyle(fontSize: 34, fontWeight: FontWeight.w900, color: Colors.white)),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 22),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(24),
+                    boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 12)],
+                  ),
+                  child: Column(
+                    children: [
+                      Text('최종 점수 $score / $total', style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w900)),
+                      const SizedBox(height: 8),
+                      Text('등급 $grade', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFF6A1B9A))),
+                      const SizedBox(height: 8),
+                      Text('정답률 ${(rate * 100).toStringAsFixed(0)}%', style: const TextStyle(fontSize: 18, color: Colors.black87)),
+                    ],
+                  ),
                 ),
-                icon: const Icon(Icons.replay),
-                label: const Text('다시 하기'),
-              ),
-            ],
+                const SizedBox(height: 24),
+                FilledButton.icon(
+                  onPressed: () {
+                    Navigator.of(context).pushReplacement(
+                      MaterialPageRoute(
+                        builder: (_) => QuizPage(mode: mode, flow: flow, fixedStage: fixedStage),
+                      ),
+                    );
+                  },
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFFFF4FB0),
+                    foregroundColor: Colors.white,
+                    minimumSize: const Size.fromHeight(54),
+                  ),
+                  icon: const Icon(Icons.replay),
+                  label: const Text('같은 설정으로 다시 하기', style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+                const SizedBox(height: 10),
+                OutlinedButton.icon(
+                  onPressed: () {
+                    Navigator.of(context).pushAndRemoveUntil(
+                      MaterialPageRoute(builder: (_) => const StartPage()),
+                      (route) => false,
+                    );
+                  },
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.white,
+                    side: const BorderSide(color: Colors.white70),
+                    minimumSize: const Size.fromHeight(50),
+                  ),
+                  icon: const Icon(Icons.home),
+                  label: const Text('모드 선택으로 돌아가기'),
+                ),
+              ],
+            ),
           ),
         ),
       ),
