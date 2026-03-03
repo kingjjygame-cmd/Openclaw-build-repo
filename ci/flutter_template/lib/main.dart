@@ -74,11 +74,11 @@ DifficultyStage? nextStage(DifficultyStage stage) {
 double revealFractionForStage(DifficultyStage stage) {
   switch (stage) {
     case DifficultyStage.easy:
-      return 0.72;
+      return 0.24;
     case DifficultyStage.medium:
-      return 0.48;
+      return 0.16;
     case DifficultyStage.hard:
-      return 0.30;
+      return 0.11;
   }
 }
 
@@ -420,11 +420,12 @@ class _QuizPageState extends State<QuizPage> {
                               color: Colors.pink.shade50,
                               alignment: Alignment.center,
                               child: LayoutBuilder(
-                                builder: (context, _) {
-                                  final shouldMask = widget.mode == QuizMode.unlimited && !_answered;
-                                  final fraction = revealFractionForStage(_stage);
+                                builder: (context, constraints2) {
+                                  final isUnlimited = widget.mode == QuizMode.unlimited;
+                                  final baseFraction = revealFractionForStage(_stage);
+                                  final targetFraction = (!isUnlimited || _answered) ? 1.0 : baseFraction;
 
-                                  Widget image = Image.asset(
+                                  final image = Image.asset(
                                     current.assetPath,
                                     fit: BoxFit.contain,
                                     errorBuilder: (context, error, stackTrace) => Column(
@@ -437,44 +438,46 @@ class _QuizPageState extends State<QuizPage> {
                                     ),
                                   );
 
-                                  if (!shouldMask) return image;
+                                  if (!isUnlimited) return image;
 
-                                  return Stack(
-                                    alignment: Alignment.center,
-                                    children: [
-                                      Opacity(opacity: 0.12, child: image),
-                                      ClipRect(
-                                        child: Align(
-                                          alignment: Alignment.center,
-                                          widthFactor: fraction,
-                                          child: image,
-                                        ),
-                                      ),
-                                      Positioned(
-                                        top: 10,
-                                        child: Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                          decoration: BoxDecoration(
-                                            color: Colors.black54,
-                                            borderRadius: BorderRadius.circular(20),
+                                  final minSide = min(constraints2.maxWidth, constraints2.maxHeight);
+
+                                  return TweenAnimationBuilder<double>(
+                                    tween: Tween<double>(end: targetFraction),
+                                    duration: const Duration(milliseconds: 700),
+                                    curve: Curves.easeOutCubic,
+                                    builder: (context, animatedFraction, child) {
+                                      final diameter = (minSide * animatedFraction).clamp(40.0, minSide);
+                                      return Stack(
+                                        alignment: Alignment.center,
+                                        children: [
+                                          Container(color: Colors.black87),
+                                          ClipOval(
+                                            child: SizedBox(
+                                              width: diameter,
+                                              height: diameter,
+                                              child: child,
+                                            ),
                                           ),
-                                          child: Text(
-                                            '일부만 공개 (${(fraction * 100).round()}%)',
-                                            style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-                                          ),
-                                        ),
-                                      ),
-                                      Positioned(
-                                        bottom: 12,
-                                        child: Text(
-                                          '정답을 고르면 전체 공개!',
-                                          style: TextStyle(
-                                            color: Colors.pink.shade900,
-                                            fontWeight: FontWeight.w700,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
+                                          if (!_answered)
+                                            Positioned(
+                                              top: 10,
+                                              child: Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.black54,
+                                                  borderRadius: BorderRadius.circular(20),
+                                                ),
+                                                child: Text(
+                                                  '원형 공개 ${(baseFraction * 100).round()}%',
+                                                  style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                                                ),
+                                              ),
+                                            ),
+                                        ],
+                                      );
+                                    },
+                                    child: image,
                                   );
                                 },
                               ),
