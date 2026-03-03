@@ -639,6 +639,14 @@ class _QuizPageState extends State<QuizPage> {
     return stages[idx + 1];
   }
 
+  DifficultyStage? _prevStageInFlow() {
+    if (widget.flow != StageFlow.allDifficulties) return null;
+    final stages = _stagesForCurrentGame();
+    final idx = stages.indexOf(_stage);
+    if (idx <= 0) return null;
+    return stages[idx - 1];
+  }
+
   Future<void> _jumpToNextStage() async {
     final next = _nextStageInFlow();
     if (next == null) return;
@@ -659,6 +667,33 @@ class _QuizPageState extends State<QuizPage> {
       _timer?.cancel();
       setState(() {
         _stage = next;
+        _qInStage = 0;
+      });
+      _prepareStageQuestions();
+      _loadQuestion();
+    }
+  }
+
+  Future<void> _jumpToPrevStage() async {
+    final prev = _prevStageInFlow();
+    if (prev == null) return;
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('이전 단계로 돌아갈까요?'),
+        content: Text('${stageKidLabel(prev)} 단계로 돌아가서 다시 플레이해요.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('취소')),
+          FilledButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('이동')),
+        ],
+      ),
+    );
+
+    if (ok == true && mounted) {
+      _timer?.cancel();
+      setState(() {
+        _stage = prev;
         _qInStage = 0;
       });
       _prepareStageQuestions();
@@ -747,15 +782,26 @@ class _QuizPageState extends State<QuizPage> {
                             ),
                           ],
                         ),
-                        if (_nextStageInFlow() != null) ...[
+                        if (_prevStageInFlow() != null || _nextStageInFlow() != null) ...[
                           const SizedBox(height: 8),
-                          Align(
-                            alignment: Alignment.centerRight,
-                            child: TextButton.icon(
-                              onPressed: _jumpToNextStage,
-                              icon: const Icon(Icons.skip_next_rounded),
-                              label: const Text('다음 단계로 넘어가기'),
-                            ),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              if (_prevStageInFlow() != null)
+                                TextButton.icon(
+                                  onPressed: _jumpToPrevStage,
+                                  icon: const Icon(Icons.skip_previous_rounded),
+                                  label: const Text('이전 단계로 돌아가기'),
+                                )
+                              else
+                                const SizedBox(width: 8),
+                              if (_nextStageInFlow() != null)
+                                TextButton.icon(
+                                  onPressed: _jumpToNextStage,
+                                  icon: const Icon(Icons.skip_next_rounded),
+                                  label: const Text('다음 단계로 넘어가기'),
+                                ),
+                            ],
                           ),
                         ],
                         const SizedBox(height: 14),
