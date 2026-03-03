@@ -1,6 +1,7 @@
 // build: asset-bundle-verify-v2
 import 'dart:async';
 import 'dart:math';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 
@@ -423,7 +424,9 @@ class _QuizPageState extends State<QuizPage> {
                                 builder: (context, constraints2) {
                                   final isUnlimited = widget.mode == QuizMode.unlimited;
                                   final baseFraction = revealFractionForStage(_stage);
-                                  final targetFraction = (!isUnlimited || _answered) ? 1.0 : baseFraction;
+                                  final targetFraction = (!isUnlimited)
+                                      ? 1.0
+                                      : (_answered ? 2.2 : baseFraction);
 
                                   final image = Image.asset(
                                     current.assetPath,
@@ -447,37 +450,35 @@ class _QuizPageState extends State<QuizPage> {
                                     duration: const Duration(milliseconds: 700),
                                     curve: Curves.easeOutCubic,
                                     builder: (context, animatedFraction, child) {
-                                      final diameter = (minSide * animatedFraction).clamp(40.0, minSide);
+                                      final radius = (minSide * animatedFraction / 2).clamp(20.0, minSide * 2);
                                       return Stack(
-                                        alignment: Alignment.center,
+                                        fit: StackFit.expand,
                                         children: [
-                                          Container(color: Colors.black87),
-                                          ClipOval(
-                                            child: SizedBox(
-                                              width: diameter,
-                                              height: diameter,
-                                              child: FittedBox(
-                                                fit: BoxFit.cover,
-                                                child: SizedBox(
-                                                  width: constraints2.maxWidth,
-                                                  height: constraints2.maxHeight,
-                                                  child: child,
-                                                ),
+                                          child!,
+                                          IgnorePointer(
+                                            child: CustomPaint(
+                                              painter: SpotlightMaskPainter(
+                                                center: Offset(constraints2.maxWidth / 2, constraints2.maxHeight / 2),
+                                                radius: radius,
                                               ),
                                             ),
                                           ),
                                           if (!_answered)
                                             Positioned(
                                               top: 10,
-                                              child: Container(
-                                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                                decoration: BoxDecoration(
-                                                  color: Colors.black54,
-                                                  borderRadius: BorderRadius.circular(20),
-                                                ),
-                                                child: Text(
-                                                  '원형 공개 ${(baseFraction * 100).round()}%',
-                                                  style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                                              left: 0,
+                                              right: 0,
+                                              child: Center(
+                                                child: Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.black54,
+                                                    borderRadius: BorderRadius.circular(20),
+                                                  ),
+                                                  child: Text(
+                                                    '원형 공개 ${(baseFraction * 100).round()}%',
+                                                    style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                                                  ),
                                                 ),
                                               ),
                                             ),
@@ -568,6 +569,32 @@ class _QuizPageState extends State<QuizPage> {
         ],
       ),
     );
+  }
+}
+
+class SpotlightMaskPainter extends CustomPainter {
+  final Offset center;
+  final double radius;
+
+  SpotlightMaskPainter({required this.center, required this.radius});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final layerRect = Offset.zero & size;
+    canvas.saveLayer(layerRect, Paint());
+
+    final overlay = Paint()..color = Colors.black87;
+    canvas.drawRect(layerRect, overlay);
+
+    final clearPaint = Paint()..blendMode = ui.BlendMode.clear;
+    canvas.drawCircle(center, radius, clearPaint);
+
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(covariant SpotlightMaskPainter oldDelegate) {
+    return oldDelegate.center != center || oldDelegate.radius != radius;
   }
 }
 
