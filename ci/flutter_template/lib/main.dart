@@ -34,6 +34,8 @@ class Character {
 
 const int questionsPerStage = 10;
 
+enum QuizMode { unlimited, timed }
+
 enum DifficultyStage { easy, medium, hard }
 
 int secondsForStage(DifficultyStage stage) {
@@ -114,7 +116,7 @@ class StartPage extends StatelessWidget {
                 const Text('🩷 티니핑 퀴즈', style: TextStyle(fontSize: 40, fontWeight: FontWeight.w900, color: Colors.white)),
                 const SizedBox(height: 12),
                 const Text(
-                  'Easy 10초 → Medium 5초 → Hard 3초',
+                  '원하는 모드를 선택해 주세요',
                   style: TextStyle(fontSize: 18, color: Colors.white),
                   textAlign: TextAlign.center,
                 ),
@@ -122,7 +124,22 @@ class StartPage extends StatelessWidget {
                 FilledButton.icon(
                   onPressed: () {
                     Navigator.of(context).pushReplacement(
-                      MaterialPageRoute(builder: (_) => const QuizPage()),
+                      MaterialPageRoute(builder: (_) => const QuizPage(mode: QuizMode.unlimited)),
+                    );
+                  },
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFF5E35B1),
+                    foregroundColor: Colors.white,
+                    minimumSize: const Size.fromHeight(56),
+                  ),
+                  icon: const Icon(Icons.all_inclusive),
+                  label: const Text('시간 무제한 모드', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                ),
+                const SizedBox(height: 12),
+                FilledButton.icon(
+                  onPressed: () {
+                    Navigator.of(context).pushReplacement(
+                      MaterialPageRoute(builder: (_) => const QuizPage(mode: QuizMode.timed)),
                     );
                   },
                   style: FilledButton.styleFrom(
@@ -130,8 +147,8 @@ class StartPage extends StatelessWidget {
                     foregroundColor: Colors.white,
                     minimumSize: const Size.fromHeight(56),
                   ),
-                  icon: const Icon(Icons.play_arrow),
-                  label: const Text('게임 시작하기', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  icon: const Icon(Icons.timer),
+                  label: const Text('시간 제한 모드 (10/5/3초)', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 ),
               ],
             ),
@@ -143,7 +160,9 @@ class StartPage extends StatelessWidget {
 }
 
 class QuizPage extends StatefulWidget {
-  const QuizPage({super.key});
+  final QuizMode mode;
+
+  const QuizPage({super.key, required this.mode});
 
   @override
   State<QuizPage> createState() => _QuizPageState();
@@ -202,21 +221,23 @@ class _QuizPageState extends State<QuizPage> {
   void _loadQuestion() {
     _answered = false;
     _selectedChoice = null;
-    _timeLeft = secondsForStage(_stage);
+    _timeLeft = widget.mode == QuizMode.timed ? secondsForStage(_stage) : -1;
 
     final target = characters[_questionIndices[_qInStage]];
     final wrongNames = characters.where((c) => c.name != target.name).map((c) => c.name).toList()..shuffle(_rand);
     _choices = [target.name, wrongNames[0], wrongNames[1]]..shuffle(_rand);
 
     _timer?.cancel();
-    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (!mounted) return;
-      setState(() => _timeLeft--);
-      if (_timeLeft <= 0) {
-        timer.cancel();
-        _handleTimeout();
-      }
-    });
+    if (widget.mode == QuizMode.timed) {
+      _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+        if (!mounted) return;
+        setState(() => _timeLeft--);
+        if (_timeLeft <= 0) {
+          timer.cancel();
+          _handleTimeout();
+        }
+      });
+    }
 
     setState(() {});
   }
@@ -288,6 +309,7 @@ class _QuizPageState extends State<QuizPage> {
             builder: (_) => ResultPage(
               score: _totalScore,
               total: questionsPerStage * 3,
+              mode: widget.mode,
             ),
           ),
         );
@@ -329,7 +351,7 @@ class _QuizPageState extends State<QuizPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('티니핑 이름 맞추기'),
+        title: Text(widget.mode == QuizMode.timed ? '티니핑 이름 맞추기 · 시간 제한' : '티니핑 이름 맞추기 · 무제한'),
         centerTitle: true,
       ),
       body: Stack(
@@ -355,7 +377,7 @@ class _QuizPageState extends State<QuizPage> {
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Text('총점: $_totalScore'),
-                            Text('제한 시간: $_timeLeft초'),
+                            Text(widget.mode == QuizMode.timed ? '제한 시간: $_timeLeft초' : '제한 시간: 무제한'),
                           ],
                         ),
                         const SizedBox(height: 14),
@@ -512,8 +534,9 @@ class _StageTransitionPageState extends State<StageTransitionPage> {
 class ResultPage extends StatelessWidget {
   final int score;
   final int total;
+  final QuizMode mode;
 
-  const ResultPage({super.key, required this.score, required this.total});
+  const ResultPage({super.key, required this.score, required this.total, required this.mode});
 
   @override
   Widget build(BuildContext context) {
@@ -531,7 +554,7 @@ class ResultPage extends StatelessWidget {
               FilledButton.icon(
                 onPressed: () {
                   Navigator.of(context).pushReplacement(
-                    MaterialPageRoute(builder: (_) => const QuizPage()),
+                    MaterialPageRoute(builder: (_) => QuizPage(mode: mode)),
                   );
                 },
                 style: FilledButton.styleFrom(
