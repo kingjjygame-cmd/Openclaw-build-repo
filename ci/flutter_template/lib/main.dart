@@ -38,12 +38,14 @@ const int questionsPerStage = 10;
 enum QuizMode { unlimited, timed, quickNoTimer }
 enum StageFlow { singleDifficulty, allDifficulties }
 
-enum DifficultyStage { easy, medium, hard }
+enum DifficultyStage { easy, basic, medium, hard }
 
 int secondsForStage(DifficultyStage stage) {
   switch (stage) {
     case DifficultyStage.easy:
       return 10;
+    case DifficultyStage.basic:
+      return 7;
     case DifficultyStage.medium:
       return 5;
     case DifficultyStage.hard:
@@ -55,6 +57,8 @@ String stageLabel(DifficultyStage stage) {
   switch (stage) {
     case DifficultyStage.easy:
       return 'Easy';
+    case DifficultyStage.basic:
+      return 'Basic';
     case DifficultyStage.medium:
       return 'Medium';
     case DifficultyStage.hard:
@@ -66,6 +70,8 @@ String stageKidLabel(DifficultyStage stage) {
   switch (stage) {
     case DifficultyStage.easy:
       return '쉬움';
+    case DifficultyStage.basic:
+      return '기본';
     case DifficultyStage.medium:
       return '보통';
     case DifficultyStage.hard:
@@ -76,6 +82,8 @@ String stageKidLabel(DifficultyStage stage) {
 DifficultyStage? nextStage(DifficultyStage stage) {
   switch (stage) {
     case DifficultyStage.easy:
+      return DifficultyStage.basic;
+    case DifficultyStage.basic:
       return DifficultyStage.medium;
     case DifficultyStage.medium:
       return DifficultyStage.hard;
@@ -87,7 +95,9 @@ DifficultyStage? nextStage(DifficultyStage stage) {
 double revealFractionForStage(DifficultyStage stage) {
   switch (stage) {
     case DifficultyStage.easy:
-      return 0.24;
+      return 0.40;
+    case DifficultyStage.basic:
+      return 0.32;
     case DifficultyStage.medium:
       return 0.24;
     case DifficultyStage.hard:
@@ -173,19 +183,26 @@ class StartPage extends StatelessWidget {
                 levelButton(
                   stage: DifficultyStage.easy,
                   emoji: '😊',
-                  hint: '가장 쉬워요 · 많이 보여줘요',
+                  hint: '아주 쉬움 · 많이 보여줘요 (40%)',
                   color: const Color(0xFF42A5F5),
                 ),
+                if (mode == QuizMode.unlimited)
+                  levelButton(
+                    stage: DifficultyStage.basic,
+                    emoji: '🙂',
+                    hint: '기본 · 적당히 보여줘요 (32%)',
+                    color: const Color(0xFF26A69A),
+                  ),
                 levelButton(
                   stage: DifficultyStage.medium,
                   emoji: '😎',
-                  hint: '적당히 도전 · 보통 난이도',
+                  hint: '보통 · 덜 보여줘요 (24%)',
                   color: const Color(0xFF7E57C2),
                 ),
                 levelButton(
                   stage: DifficultyStage.hard,
                   emoji: '🔥',
-                  hint: '진짜 도전 · 조금만 보여줘요',
+                  hint: '어려움 · 조금만 보여줘요 (16%)',
                   color: const Color(0xFFEF5350),
                 ),
               ],
@@ -249,7 +266,7 @@ class StartPage extends StatelessWidget {
               onPressed: () => _startAllDifficulties(context, mode),
               style: FilledButton.styleFrom(backgroundColor: color, foregroundColor: Colors.white),
               icon: const Icon(Icons.rocket_launch),
-              label: const Text('Easy → Hard 전체 플레이'),
+              label: Text(mode == QuizMode.unlimited ? 'Easy → Basic → Medium → Hard' : 'Easy → Medium → Hard'),
             ),
           ],
         ),
@@ -389,11 +406,24 @@ class _QuizPageState extends State<QuizPage> {
   String _inlineResultText = '';
   Offset _spotlightCenterFactor = const Offset(0.5, 0.5);
 
+  List<DifficultyStage> _stagesForCurrentGame() {
+    if (widget.mode == QuizMode.unlimited) {
+      return [
+        DifficultyStage.easy,
+        DifficultyStage.basic,
+        DifficultyStage.medium,
+        DifficultyStage.hard,
+      ];
+    }
+    return [DifficultyStage.easy, DifficultyStage.medium, DifficultyStage.hard];
+  }
+
   Offset _pickSpotlightCenterFactor() {
     // 배경만 보이는 경우를 줄이기 위해, 캐릭터가 주로 배치되는 중앙 영역에서만 샘플링합니다.
     // (요청사항: 공개 원형의 80% 이상이 캐릭터 영역에 오도록 하는 휴리스틱)
     final maxDist = switch (_stage) {
-      DifficultyStage.easy => 0.15,
+      DifficultyStage.easy => 0.17,
+      DifficultyStage.basic => 0.14,
       DifficultyStage.medium => 0.12,
       DifficultyStage.hard => 0.10,
     };
@@ -434,7 +464,7 @@ class _QuizPageState extends State<QuizPage> {
 
   void _startNewGame() {
     _timer?.cancel();
-    _stage = widget.fixedStage ?? DifficultyStage.easy;
+    _stage = widget.fixedStage ?? _stagesForCurrentGame().first;
     _qInStage = 0;
     _totalScore = 0;
     _prepareStageQuestions();
@@ -542,10 +572,12 @@ class _QuizPageState extends State<QuizPage> {
 
     if (_qInStage >= questionsPerStage - 1) {
       final isSingleFlow = widget.flow == StageFlow.singleDifficulty;
-      final upcoming = isSingleFlow ? null : nextStage(_stage);
+      final stages = _stagesForCurrentGame();
+      final currentIdx = stages.indexOf(_stage);
+      final upcoming = (!isSingleFlow && currentIdx >= 0 && currentIdx < stages.length - 1) ? stages[currentIdx + 1] : null;
       if (upcoming == null) {
         _timer?.cancel();
-        final totalQuestions = isSingleFlow ? questionsPerStage : questionsPerStage * 3;
+        final totalQuestions = isSingleFlow ? questionsPerStage : questionsPerStage * stages.length;
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(
             builder: (_) => ResultPage(
@@ -596,7 +628,7 @@ class _QuizPageState extends State<QuizPage> {
     if (widget.flow == StageFlow.singleDifficulty) {
       return '${stageLabel(widget.fixedStage!)} 단일';
     }
-    return 'Easy→Hard 전체';
+    return widget.mode == QuizMode.unlimited ? 'Easy→Basic→Medium→Hard' : 'Easy→Medium→Hard';
   }
 
   Future<void> _goHome() async {
