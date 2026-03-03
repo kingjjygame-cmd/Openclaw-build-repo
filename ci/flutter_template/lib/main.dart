@@ -456,7 +456,14 @@ class _QuizPageState extends State<QuizPage> {
                                             child: SizedBox(
                                               width: diameter,
                                               height: diameter,
-                                              child: child,
+                                              child: FittedBox(
+                                                fit: BoxFit.cover,
+                                                child: SizedBox(
+                                                  width: constraints2.maxWidth,
+                                                  height: constraints2.maxHeight,
+                                                  child: child,
+                                                ),
+                                              ),
                                             ),
                                           ),
                                           if (!_answered)
