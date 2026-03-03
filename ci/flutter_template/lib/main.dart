@@ -35,7 +35,7 @@ class Character {
 
 const int questionsPerStage = 10;
 
-enum QuizMode { unlimited, timed }
+enum QuizMode { unlimited, timed, quickNoTimer }
 enum StageFlow { singleDifficulty, allDifficulties }
 
 enum DifficultyStage { easy, medium, hard }
@@ -301,6 +301,44 @@ class StartPage extends StatelessWidget {
                     title: '빨리 맞추기',
                     subtitle: '시간(10/5/3초) 안에 빠르게 맞히는 모드',
                   ),
+                  Card(
+                    elevation: 8,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                    child: Padding(
+                      padding: const EdgeInsets.all(14),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          const Row(
+                            children: [
+                              Icon(Icons.flash_on, color: Color(0xFFFF8F00)),
+                              SizedBox(width: 8),
+                              Text('빨리 맞추기 (시간 없음)', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          const Text('시간 제한 없이 바로바로 맞히는 단일 난이도 모드', style: TextStyle(color: Colors.black54)),
+                          const SizedBox(height: 10),
+                          FilledButton.icon(
+                            onPressed: () {
+                              Navigator.of(context).pushReplacement(
+                                MaterialPageRoute(
+                                  builder: (_) => const QuizPage(
+                                    mode: QuizMode.quickNoTimer,
+                                    flow: StageFlow.singleDifficulty,
+                                    fixedStage: DifficultyStage.medium,
+                                  ),
+                                ),
+                              );
+                            },
+                            style: FilledButton.styleFrom(backgroundColor: const Color(0xFFFF8F00), foregroundColor: Colors.white),
+                            icon: const Icon(Icons.play_arrow_rounded),
+                            label: const Text('바로 시작'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -544,7 +582,14 @@ class _QuizPageState extends State<QuizPage> {
   }
 
   String _modeTitle() {
-    return widget.mode == QuizMode.timed ? '빨리 맞추기' : '일부만 보고 맞추기';
+    switch (widget.mode) {
+      case QuizMode.unlimited:
+        return '일부만 보고 맞추기';
+      case QuizMode.timed:
+        return '빨리 맞추기';
+      case QuizMode.quickNoTimer:
+        return '빨리 맞추기 (시간 없음)';
+    }
   }
 
   String _flowTitle() {
@@ -618,7 +663,9 @@ class _QuizPageState extends State<QuizPage> {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         Text(
-                          '${stageKidLabel(_stage)} (${stageLabel(_stage)}) · 문제 ${_qInStage + 1} / $questionsPerStage',
+                          widget.mode == QuizMode.quickNoTimer
+                              ? '기본 난이도 · 문제 ${_qInStage + 1} / $questionsPerStage'
+                              : '${stageKidLabel(_stage)} (${stageLabel(_stage)}) · 문제 ${_qInStage + 1} / $questionsPerStage',
                           style: Theme.of(context).textTheme.titleMedium,
                         ),
                         const SizedBox(height: 8),
@@ -626,7 +673,11 @@ class _QuizPageState extends State<QuizPage> {
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Text('총점: $_totalScore'),
-                            Text(widget.mode == QuizMode.timed ? '제한 시간: $_timeLeft초' : _flowTitle()),
+                            Text(
+                              widget.mode == QuizMode.timed
+                                  ? '제한 시간: $_timeLeft초'
+                                  : (widget.mode == QuizMode.quickNoTimer ? '시간 제한 없음' : _flowTitle()),
+                            ),
                           ],
                         ),
                         const SizedBox(height: 14),
