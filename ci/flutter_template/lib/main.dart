@@ -631,6 +631,41 @@ class _QuizPageState extends State<QuizPage> {
     return widget.mode == QuizMode.unlimited ? 'Easy→Basic→Medium→Hard' : 'Easy→Medium→Hard';
   }
 
+  DifficultyStage? _nextStageInFlow() {
+    if (widget.flow != StageFlow.allDifficulties) return null;
+    final stages = _stagesForCurrentGame();
+    final idx = stages.indexOf(_stage);
+    if (idx < 0 || idx >= stages.length - 1) return null;
+    return stages[idx + 1];
+  }
+
+  Future<void> _jumpToNextStage() async {
+    final next = _nextStageInFlow();
+    if (next == null) return;
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('다음 난이도로 바로 갈까요?'),
+        content: Text('현재 ${stageKidLabel(_stage)} 단계를 종료하고 ${stageKidLabel(next)} 단계로 이동합니다.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('취소')),
+          FilledButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('이동')),
+        ],
+      ),
+    );
+
+    if (ok == true && mounted) {
+      _timer?.cancel();
+      setState(() {
+        _stage = next;
+        _qInStage = 0;
+      });
+      _prepareStageQuestions();
+      _loadQuestion();
+    }
+  }
+
   Future<void> _goHome() async {
     final shouldGo = await showDialog<bool>(
       context: context,
@@ -712,6 +747,17 @@ class _QuizPageState extends State<QuizPage> {
                             ),
                           ],
                         ),
+                        if (_nextStageInFlow() != null) ...[
+                          const SizedBox(height: 8),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: TextButton.icon(
+                              onPressed: _jumpToNextStage,
+                              icon: const Icon(Icons.skip_next_rounded),
+                              label: const Text('다음 난이도로 바로 이동'),
+                            ),
+                          ),
+                        ],
                         const SizedBox(height: 14),
                         SizedBox(
                           height: imageHeight,
