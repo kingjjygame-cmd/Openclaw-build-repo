@@ -75,11 +75,11 @@ DifficultyStage? nextStage(DifficultyStage stage) {
 double revealFractionForStage(DifficultyStage stage) {
   switch (stage) {
     case DifficultyStage.easy:
-      return 0.24;
+      return 0.34;
     case DifficultyStage.medium:
-      return 0.16;
+      return 0.24;
     case DifficultyStage.hard:
-      return 0.11;
+      return 0.16;
   }
 }
 
