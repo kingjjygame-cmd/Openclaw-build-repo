@@ -62,6 +62,17 @@ String stageLabel(DifficultyStage stage) {
   }
 }
 
+String stageKidLabel(DifficultyStage stage) {
+  switch (stage) {
+    case DifficultyStage.easy:
+      return '쉬움';
+    case DifficultyStage.medium:
+      return '보통';
+    case DifficultyStage.hard:
+      return '어려움';
+  }
+}
+
 DifficultyStage? nextStage(DifficultyStage stage) {
   switch (stage) {
     case DifficultyStage.easy:
@@ -110,20 +121,78 @@ class StartPage extends StatelessWidget {
   Future<void> _startSingleDifficulty(BuildContext context, QuizMode mode) async {
     final selected = await showModalBottomSheet<DifficultyStage>(
       context: context,
-      builder: (context) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: DifficultyStage.values
-              .map(
-                (stage) => ListTile(
-                  leading: const Icon(Icons.adjust),
-                  title: Text('${stageLabel(stage)}만 플레이'),
-                  onTap: () => Navigator.of(context).pop(stage),
+      isScrollControlled: true,
+      builder: (context) {
+        Widget levelButton({
+          required DifficultyStage stage,
+          required String emoji,
+          required String hint,
+          required Color color,
+        }) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: FilledButton(
+              onPressed: () => Navigator.of(context).pop(stage),
+              style: FilledButton.styleFrom(
+                backgroundColor: color,
+                foregroundColor: Colors.white,
+                minimumSize: const Size.fromHeight(62),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              ),
+              child: Row(
+                children: [
+                  Text(emoji, style: const TextStyle(fontSize: 24)),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text('${stageKidLabel(stage)} (${stageLabel(stage)})', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+                        Text(hint, style: const TextStyle(fontSize: 13, color: Colors.white70)),
+                      ],
+                    ),
+                  ),
+                  const Icon(Icons.arrow_forward_ios_rounded, size: 16),
+                ],
+              ),
+            ),
+          );
+        }
+
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('난이도를 골라주세요', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
+                const SizedBox(height: 4),
+                const Text('아이가 바로 이해할 수 있게 쉽게 고를 수 있어요', style: TextStyle(color: Colors.black54)),
+                const SizedBox(height: 14),
+                levelButton(
+                  stage: DifficultyStage.easy,
+                  emoji: '😊',
+                  hint: '가장 쉬워요 · 많이 보여줘요',
+                  color: const Color(0xFF42A5F5),
                 ),
-              )
-              .toList(),
-        ),
-      ),
+                levelButton(
+                  stage: DifficultyStage.medium,
+                  emoji: '😎',
+                  hint: '적당히 도전 · 보통 난이도',
+                  color: const Color(0xFF7E57C2),
+                ),
+                levelButton(
+                  stage: DifficultyStage.hard,
+                  emoji: '🔥',
+                  hint: '진짜 도전 · 조금만 보여줘요',
+                  color: const Color(0xFFEF5350),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
 
     if (selected == null || !context.mounted) return;
@@ -524,10 +593,13 @@ class _QuizPageState extends State<QuizPage> {
         title: Text('티니핑 이름 맞추기 · ${_modeTitle()}'),
         centerTitle: true,
         actions: [
-          IconButton(
-            tooltip: '처음으로',
-            onPressed: _goHome,
-            icon: const Icon(Icons.home_rounded),
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: TextButton.icon(
+              onPressed: _goHome,
+              icon: const Icon(Icons.home_rounded),
+              label: const Text('처음으로'),
+            ),
           ),
         ],
       ),
@@ -546,7 +618,7 @@ class _QuizPageState extends State<QuizPage> {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         Text(
-                          '${stageLabel(_stage)} · 문제 ${_qInStage + 1} / $questionsPerStage',
+                          '${stageKidLabel(_stage)} (${stageLabel(_stage)}) · 문제 ${_qInStage + 1} / $questionsPerStage',
                           style: Theme.of(context).textTheme.titleMedium,
                         ),
                         const SizedBox(height: 8),
@@ -654,6 +726,17 @@ class _QuizPageState extends State<QuizPage> {
                               child: Text(c),
                             ),
                           ),
+                        ),
+                        const SizedBox(height: 8),
+                        OutlinedButton.icon(
+                          onPressed: _goHome,
+                          style: OutlinedButton.styleFrom(
+                            minimumSize: const Size.fromHeight(50),
+                            foregroundColor: const Color(0xFFC62828),
+                            side: const BorderSide(color: Color(0xFFC62828), width: 1.6),
+                          ),
+                          icon: const Icon(Icons.exit_to_app_rounded),
+                          label: const Text('모드 선택으로 나가기', style: TextStyle(fontWeight: FontWeight.bold)),
                         ),
                       ],
                     ),
