@@ -202,6 +202,7 @@ class _QuizPageState extends State<QuizPage> {
   bool _showInlineResult = false;
   Color _inlineResultColor = Colors.green;
   String _inlineResultText = '';
+  Offset _spotlightCenterFactor = const Offset(0.5, 0.5);
 
   @override
   void initState() {
@@ -239,6 +240,10 @@ class _QuizPageState extends State<QuizPage> {
     _selectedChoice = null;
     _showInlineResult = false;
     _inlineResultText = '';
+    _spotlightCenterFactor = Offset(
+      0.2 + (_rand.nextDouble() * 0.6),
+      0.2 + (_rand.nextDouble() * 0.6),
+    );
     _timeLeft = widget.mode == QuizMode.timed ? secondsForStage(_stage) : -1;
 
     final target = characters[_questionIndices[_qInStage]];
@@ -458,7 +463,10 @@ class _QuizPageState extends State<QuizPage> {
                                           IgnorePointer(
                                             child: CustomPaint(
                                               painter: SpotlightMaskPainter(
-                                                center: Offset(constraints2.maxWidth / 2, constraints2.maxHeight / 2),
+                                                center: Offset(
+                                                  constraints2.maxWidth * _spotlightCenterFactor.dx,
+                                                  constraints2.maxHeight * _spotlightCenterFactor.dy,
+                                                ),
                                                 radius: radius,
                                               ),
                                             ),
@@ -583,7 +591,7 @@ class SpotlightMaskPainter extends CustomPainter {
     final layerRect = Offset.zero & size;
     canvas.saveLayer(layerRect, Paint());
 
-    final overlay = Paint()..color = Colors.black87;
+    final overlay = Paint()..color = Colors.white;
     canvas.drawRect(layerRect, overlay);
 
     final clearPaint = Paint()..blendMode = ui.BlendMode.clear;
