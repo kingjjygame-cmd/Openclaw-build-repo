@@ -71,6 +71,17 @@ DifficultyStage? nextStage(DifficultyStage stage) {
   }
 }
 
+double revealFractionForStage(DifficultyStage stage) {
+  switch (stage) {
+    case DifficultyStage.easy:
+      return 0.72;
+    case DifficultyStage.medium:
+      return 0.48;
+    case DifficultyStage.hard:
+      return 0.30;
+  }
+}
+
 final List<Character> characters = [
   const Character(name: '프린세스 하츄핑', assetPath: 'assets/images/hachuping.webp'),
   const Character(name: '사뿐핑', assetPath: 'assets/images/claireping.png'),
@@ -116,7 +127,7 @@ class StartPage extends StatelessWidget {
                 const Text('🩷 티니핑 퀴즈', style: TextStyle(fontSize: 40, fontWeight: FontWeight.w900, color: Colors.white)),
                 const SizedBox(height: 12),
                 const Text(
-                  '원하는 모드를 선택해 주세요',
+                  '원하는 모드를 선택해 주세요\n(무제한 모드: 일부 공개 후 정답 선택 시 전체 공개)',
                   style: TextStyle(fontSize: 18, color: Colors.white),
                   textAlign: TextAlign.center,
                 ),
@@ -187,6 +198,10 @@ class _QuizPageState extends State<QuizPage> {
   String _reactionEmoji = '';
   String _reactionText = '';
 
+  bool _showInlineResult = false;
+  Color _inlineResultColor = Colors.green;
+  String _inlineResultText = '';
+
   @override
   void initState() {
     super.initState();
@@ -221,6 +236,8 @@ class _QuizPageState extends State<QuizPage> {
   void _loadQuestion() {
     _answered = false;
     _selectedChoice = null;
+    _showInlineResult = false;
+    _inlineResultText = '';
     _timeLeft = widget.mode == QuizMode.timed ? secondsForStage(_stage) : -1;
 
     final target = characters[_questionIndices[_qInStage]];
@@ -293,6 +310,20 @@ class _QuizPageState extends State<QuizPage> {
     });
 
     _timer?.cancel();
+
+    if (widget.mode == QuizMode.unlimited) {
+      setState(() {
+        _showInlineResult = true;
+        _inlineResultColor = isCorrect ? const Color(0xFF2E7D32) : const Color(0xFFC2185B);
+        _inlineResultText = isCorrect ? '정답!' : '오답! 정답은 $answer';
+      });
+      await Future.delayed(const Duration(milliseconds: 1200));
+      if (!mounted) return;
+      setState(() => _showInlineResult = false);
+      await _goNext();
+      return;
+    }
+
     await _showFullscreenReaction(isCorrect: isCorrect, answer: answer);
     await _goNext();
   }
@@ -388,17 +419,64 @@ class _QuizPageState extends State<QuizPage> {
                             child: Container(
                               color: Colors.pink.shade50,
                               alignment: Alignment.center,
-                              child: Image.asset(
-                                current.assetPath,
-                                fit: BoxFit.contain,
-                                errorBuilder: (context, error, stackTrace) => Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    const Icon(Icons.image_not_supported, size: 36),
-                                    const SizedBox(height: 8),
-                                    Text('${current.name} (이미지 로드 실패)'),
-                                  ],
-                                ),
+                              child: LayoutBuilder(
+                                builder: (context, _) {
+                                  final shouldMask = widget.mode == QuizMode.unlimited && !_answered;
+                                  final fraction = revealFractionForStage(_stage);
+
+                                  Widget image = Image.asset(
+                                    current.assetPath,
+                                    fit: BoxFit.contain,
+                                    errorBuilder: (context, error, stackTrace) => Column(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        const Icon(Icons.image_not_supported, size: 36),
+                                        const SizedBox(height: 8),
+                                        Text('${current.name} (이미지 로드 실패)'),
+                                      ],
+                                    ),
+                                  );
+
+                                  if (!shouldMask) return image;
+
+                                  return Stack(
+                                    alignment: Alignment.center,
+                                    children: [
+                                      Opacity(opacity: 0.12, child: image),
+                                      ClipRect(
+                                        child: Align(
+                                          alignment: Alignment.center,
+                                          widthFactor: fraction,
+                                          child: image,
+                                        ),
+                                      ),
+                                      Positioned(
+                                        top: 10,
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                          decoration: BoxDecoration(
+                                            color: Colors.black54,
+                                            borderRadius: BorderRadius.circular(20),
+                                          ),
+                                          child: Text(
+                                            '일부만 공개 (${(fraction * 100).round()}%)',
+                                            style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                                          ),
+                                        ),
+                                      ),
+                                      Positioned(
+                                        bottom: 12,
+                                        child: Text(
+                                          '정답을 고르면 전체 공개!',
+                                          style: TextStyle(
+                                            color: Colors.pink.shade900,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  );
+                                },
                               ),
                             ),
                           ),
@@ -424,6 +502,26 @@ class _QuizPageState extends State<QuizPage> {
               },
             ),
           ),
+          if (_showInlineResult)
+            Positioned(
+              top: 18,
+              left: 16,
+              right: 16,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                decoration: BoxDecoration(
+                  color: _inlineResultColor,
+                  borderRadius: BorderRadius.circular(14),
+                  boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 8)],
+                ),
+                child: Text(
+                  _inlineResultText,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w900),
+                ),
+              ),
+            ),
           AnimatedOpacity(
             opacity: _showReaction ? 1 : 0,
             duration: const Duration(milliseconds: 180),
