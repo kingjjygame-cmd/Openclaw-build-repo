@@ -646,8 +646,8 @@ class _QuizPageState extends State<QuizPage> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('다음 난이도로 바로 갈까요?'),
-        content: Text('현재 ${stageKidLabel(_stage)} 단계를 종료하고 ${stageKidLabel(next)} 단계로 이동합니다.'),
+        title: const Text('다음 단계로 넘어갈까요?'),
+        content: Text('지금 단계는 여기까지 하고, ${stageKidLabel(next)} 단계로 바로 시작해요.'),
         actions: [
           TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('취소')),
           FilledButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('이동')),
@@ -754,7 +754,7 @@ class _QuizPageState extends State<QuizPage> {
                             child: TextButton.icon(
                               onPressed: _jumpToNextStage,
                               icon: const Icon(Icons.skip_next_rounded),
-                              label: const Text('다음 난이도로 바로 이동'),
+                              label: const Text('다음 단계로 넘어가기'),
                             ),
                           ),
                         ],
