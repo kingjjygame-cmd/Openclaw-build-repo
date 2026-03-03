@@ -429,10 +429,6 @@ class _QuizPageState extends State<QuizPage> {
                                 builder: (context, constraints2) {
                                   final isUnlimited = widget.mode == QuizMode.unlimited;
                                   final baseFraction = revealFractionForStage(_stage);
-                                  final targetFraction = (!isUnlimited)
-                                      ? 1.0
-                                      : (_answered ? 2.2 : baseFraction);
-
                                   final image = Image.asset(
                                     current.assetPath,
                                     fit: BoxFit.contain,
@@ -450,50 +446,55 @@ class _QuizPageState extends State<QuizPage> {
 
                                   final minSide = min(constraints2.maxWidth, constraints2.maxHeight);
 
-                                  return TweenAnimationBuilder<double>(
-                                    tween: Tween<double>(end: targetFraction),
-                                    duration: const Duration(milliseconds: 700),
-                                    curve: Curves.easeOutCubic,
-                                    builder: (context, animatedFraction, child) {
-                                      final radius = (minSide * animatedFraction / 2).clamp(20.0, minSide * 2);
-                                      return Stack(
-                                        fit: StackFit.expand,
-                                        children: [
-                                          child!,
-                                          IgnorePointer(
-                                            child: CustomPaint(
-                                              painter: SpotlightMaskPainter(
-                                                center: Offset(
-                                                  constraints2.maxWidth * _spotlightCenterFactor.dx,
-                                                  constraints2.maxHeight * _spotlightCenterFactor.dy,
+                                  Widget masked(double fraction) {
+                                    final radius = (minSide * fraction / 2).clamp(20.0, minSide * 2);
+                                    return Stack(
+                                      fit: StackFit.expand,
+                                      children: [
+                                        image,
+                                        IgnorePointer(
+                                          child: CustomPaint(
+                                            painter: SpotlightMaskPainter(
+                                              center: Offset(
+                                                constraints2.maxWidth * _spotlightCenterFactor.dx,
+                                                constraints2.maxHeight * _spotlightCenterFactor.dy,
+                                              ),
+                                              radius: radius,
+                                            ),
+                                          ),
+                                        ),
+                                        if (!_answered)
+                                          Positioned(
+                                            top: 10,
+                                            left: 0,
+                                            right: 0,
+                                            child: Center(
+                                              child: Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.black54,
+                                                  borderRadius: BorderRadius.circular(20),
                                                 ),
-                                                radius: radius,
+                                                child: Text(
+                                                  '원형 공개 ${(baseFraction * 100).round()}%',
+                                                  style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                                                ),
                                               ),
                                             ),
                                           ),
-                                          if (!_answered)
-                                            Positioned(
-                                              top: 10,
-                                              left: 0,
-                                              right: 0,
-                                              child: Center(
-                                                child: Container(
-                                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                                  decoration: BoxDecoration(
-                                                    color: Colors.black54,
-                                                    borderRadius: BorderRadius.circular(20),
-                                                  ),
-                                                  child: Text(
-                                                    '원형 공개 ${(baseFraction * 100).round()}%',
-                                                    style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-                                                  ),
-                                                ),
-                                              ),
-                                            ),
-                                        ],
-                                      );
-                                    },
-                                    child: image,
+                                      ],
+                                    );
+                                  }
+
+                                  if (!_answered) {
+                                    return masked(baseFraction);
+                                  }
+
+                                  return TweenAnimationBuilder<double>(
+                                    tween: Tween<double>(begin: baseFraction, end: 2.2),
+                                    duration: const Duration(milliseconds: 700),
+                                    curve: Curves.easeOutCubic,
+                                    builder: (context, animatedFraction, _) => masked(animatedFraction),
                                   );
                                 },
                               ),
