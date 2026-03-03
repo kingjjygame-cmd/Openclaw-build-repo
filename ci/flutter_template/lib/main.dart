@@ -128,7 +128,7 @@ class StartPage extends StatelessWidget {
                 const Text('🩷 티니핑 퀴즈', style: TextStyle(fontSize: 40, fontWeight: FontWeight.w900, color: Colors.white)),
                 const SizedBox(height: 12),
                 const Text(
-                  '원하는 모드를 선택해 주세요\n(무제한 모드: 일부 공개 후 정답 선택 시 전체 공개)',
+                  '원하는 모드를 선택해 주세요\n(일부만 보고 맞추기: 일부 공개 후 정답 선택 시 전체 공개)',
                   style: TextStyle(fontSize: 18, color: Colors.white),
                   textAlign: TextAlign.center,
                 ),
@@ -145,7 +145,7 @@ class StartPage extends StatelessWidget {
                     minimumSize: const Size.fromHeight(56),
                   ),
                   icon: const Icon(Icons.all_inclusive),
-                  label: const Text('시간 무제한 모드', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  label: const Text('일부만 보고 맞추기', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 ),
                 const SizedBox(height: 12),
                 FilledButton.icon(
@@ -160,7 +160,7 @@ class StartPage extends StatelessWidget {
                     minimumSize: const Size.fromHeight(56),
                   ),
                   icon: const Icon(Icons.timer),
-                  label: const Text('시간 제한 모드 (10/5/3초)', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  label: const Text('빨리 맞추기 (10/5/3초)', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 ),
               ],
             ),
@@ -406,7 +406,7 @@ class _QuizPageState extends State<QuizPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.mode == QuizMode.timed ? '티니핑 이름 맞추기 · 시간 제한' : '티니핑 이름 맞추기 · 무제한'),
+        title: Text(widget.mode == QuizMode.timed ? '티니핑 이름 맞추기 · 빨리 맞추기' : '티니핑 이름 맞추기 · 일부만 보고 맞추기'),
         centerTitle: true,
       ),
       body: Stack(
@@ -432,7 +432,7 @@ class _QuizPageState extends State<QuizPage> {
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Text('총점: $_totalScore'),
-                            Text(widget.mode == QuizMode.timed ? '제한 시간: $_timeLeft초' : '제한 시간: 무제한'),
+                            Text(widget.mode == QuizMode.timed ? '제한 시간: $_timeLeft초' : '진행 방식: 일부만 보고 맞추기'),
                           ],
                         ),
                         const SizedBox(height: 14),
