@@ -204,6 +204,27 @@ class _QuizPageState extends State<QuizPage> {
   String _inlineResultText = '';
   Offset _spotlightCenterFactor = const Offset(0.5, 0.5);
 
+  Offset _pickSpotlightCenterFactor() {
+    // 배경만 보이는 경우를 줄이기 위해, 캐릭터가 주로 배치되는 중앙 영역에서만 샘플링합니다.
+    // (요청사항: 공개 원형의 80% 이상이 캐릭터 영역에 오도록 하는 휴리스틱)
+    final maxDist = switch (_stage) {
+      DifficultyStage.easy => 0.15,
+      DifficultyStage.medium => 0.12,
+      DifficultyStage.hard => 0.10,
+    };
+
+    for (int i = 0; i < 40; i++) {
+      final angle = _rand.nextDouble() * pi * 2;
+      final dist = _rand.nextDouble() * maxDist;
+      final x = 0.5 + cos(angle) * dist;
+      final y = 0.5 + sin(angle) * dist;
+      if (x >= 0.25 && x <= 0.75 && y >= 0.2 && y <= 0.8) {
+        return Offset(x, y);
+      }
+    }
+    return const Offset(0.5, 0.5);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -240,10 +261,7 @@ class _QuizPageState extends State<QuizPage> {
     _selectedChoice = null;
     _showInlineResult = false;
     _inlineResultText = '';
-    _spotlightCenterFactor = Offset(
-      0.2 + (_rand.nextDouble() * 0.6),
-      0.2 + (_rand.nextDouble() * 0.6),
-    );
+    _spotlightCenterFactor = _pickSpotlightCenterFactor();
     _timeLeft = widget.mode == QuizMode.timed ? secondsForStage(_stage) : -1;
 
     final target = characters[_questionIndices[_qInStage]];
