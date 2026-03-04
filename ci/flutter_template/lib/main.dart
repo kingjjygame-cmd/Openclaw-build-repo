@@ -107,8 +107,8 @@ double revealFractionForStage(DifficultyStage stage) {
 
 final List<Character> characters = [
   const Character(name: '하츄핑', assetPath: 'assets/images/hachuping.webp'),
-  const Character(name: '사뿐핑', assetPath: 'assets/images/claireping.png'),
-  const Character(name: '아름핑', assetPath: 'assets/images/graceping.png'),
+  const Character(name: '사뿐핑', assetPath: 'assets/images/graceping.png'),
+  const Character(name: '아름핑', assetPath: 'assets/images/claireping.png'),
   const Character(name: '뽀니핑', assetPath: 'assets/images/bonnyping.png'),
   const Character(name: '이클립스핑', assetPath: 'assets/images/eclipseping.png'),
   const Character(name: '다이아나핑', assetPath: 'assets/images/dianaping.png'),
