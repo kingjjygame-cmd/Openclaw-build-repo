@@ -206,8 +206,8 @@ class _AnimatedDogState extends State<AnimatedDog> with TickerProviderStateMixin
       ..repeat(reverse: true);
     _tailController = AnimationController(vsync: this, duration: const Duration(milliseconds: 380))
       ..repeat(reverse: true);
-    _walkController = AnimationController(vsync: this, duration: const Duration(milliseconds: 4200))
-      ..repeat(reverse: true);
+    _walkController = AnimationController(vsync: this, duration: const Duration(milliseconds: 5600))
+      ..repeat();
   }
 
   @override
@@ -255,23 +255,46 @@ class _AnimatedDogState extends State<AnimatedDog> with TickerProviderStateMixin
         return AnimatedBuilder(
           animation: Listenable.merge([_bobController, _tailController, _walkController]),
           builder: (context, child) {
+            final t = _walkController.value;
             final bob = math.sin(_bobController.value * math.pi) * 6;
             final tailAngle = (widget.mood == MoodFace.sad ? 0.05 : 0.22) * (1 - (_tailController.value * 2 - 1).abs());
-            final walkX = maxX * _walkController.value;
-            final facingRight = _walkController.status != AnimationStatus.reverse;
+
+            // 0.0~0.5: left->right, 0.5~1.0: right->left (ping-pong)
+            final forward = t < 0.5;
+            final p = forward ? (t / 0.5) : ((1 - t) / 0.5);
+            final walkX = maxX * p;
+
+            // pseudo-3D depth: center comes closer (bigger), sides farther (smaller)
+            final depth = 1.0 - (2 * (p - 0.5)).abs(); // center=1, edges=0
+            final depthScale = 0.88 + (0.22 * depth);
+            final yDepthOffset = (1 - depth) * 26;
+            final shadowWidth = 84 + (34 * depth);
+            final shadowOpacity = 0.14 + (0.16 * depth);
 
             return Stack(
               children: [
                 Positioned(
+                  left: walkX + (dogWidth / 2) - (shadowWidth / 2),
+                  top: 178 + yDepthOffset,
+                  child: Container(
+                    width: shadowWidth,
+                    height: 18,
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(shadowOpacity),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                  ),
+                ),
+                Positioned(
                   left: walkX,
-                  top: 20,
+                  top: 20 + yDepthOffset,
                   child: Transform.translate(
                     offset: Offset(0, -bob),
                     child: Transform(
                       alignment: Alignment.center,
-                      transform: Matrix4.identity()..scale(facingRight ? 1.0 : -1.0, 1.0),
+                      transform: Matrix4.identity()..scale(forward ? 1.0 : -1.0, 1.0),
                       child: Transform.scale(
-                        scale: scale,
+                        scale: scale * depthScale,
                         child: SizedBox(
                           width: dogWidth,
                           height: 170,
