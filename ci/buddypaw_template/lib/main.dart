@@ -1,184 +1,144 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
-void main() {
-  runApp(const BuddyPawApp());
-}
+void main() => runApp(const TinipingGameApp());
 
-class BuddyPawApp extends StatelessWidget {
-  const BuddyPawApp({super.key});
+class TinipingGameApp extends StatelessWidget {
+  const TinipingGameApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'BuddyPaw',
       debugShowCheckedModeBanner: false,
+      title: '티니핑 월드',
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF7A4B28)),
         useMaterial3: true,
+        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFFFF66A6)),
       ),
-      home: const HomeScreen(),
+      home: const TinipingGameScreen(),
     );
   }
 }
 
-enum GrowthStage { baby, junior, adult }
-enum MoodFace { happy, normal, tired, sad }
-enum PetAction { feed, walk, play, rest }
+class Tiniping {
+  final String name;
+  final Color color;
+  final String emoji;
 
-class PetState {
-  int bond;
-  int hunger;
-  int mood;
-  int energy;
-  double care7d;
-  double care14d;
-
-  PetState({
-    required this.bond,
-    required this.hunger,
-    required this.mood,
-    required this.energy,
-    required this.care7d,
-    required this.care14d,
-  });
+  const Tiniping(this.name, this.color, this.emoji);
 }
 
-class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+class TinipingGameScreen extends StatefulWidget {
+  const TinipingGameScreen({super.key});
 
   @override
-  State<HomeScreen> createState() => _HomeScreenState();
+  State<TinipingGameScreen> createState() => _TinipingGameScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
-  final PetState pet = PetState(
-    bond: 12,
-    hunger: 38,
-    mood: 68,
-    energy: 74,
-    care7d: 0.58,
-    care14d: 0.45,
-  );
+class _TinipingGameScreenState extends State<TinipingGameScreen>
+    with SingleTickerProviderStateMixin {
+  final List<Tiniping> pings = const [
+    Tiniping('하츄핑', Color(0xFFFF8FB8), '💖'),
+    Tiniping('차밍핑', Color(0xFFFFB3D1), '✨'),
+    Tiniping('깜빡핑', Color(0xFF9D8CFF), '🌙'),
+    Tiniping('반짝핑', Color(0xFFFFD166), '⭐'),
+  ];
 
-  GrowthStage _getGrowthStage(PetState s) {
-    if (s.bond >= 50 && s.care14d >= 0.7) return GrowthStage.adult;
-    if (s.bond >= 20 && s.care7d >= 0.6) return GrowthStage.junior;
-    return GrowthStage.baby;
+  int selected = 0;
+  int score = 0;
+  int bestScore = 0;
+  int hearts = 3;
+  bool playing = false;
+
+  late final AnimationController _controller;
+  final math.Random _random = math.Random();
+
+  double itemX = 0.5;
+  double itemY = -0.15;
+  double speed = 0.008;
+  bool isGolden = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 16))
+      ..addListener(_tick)
+      ..repeat();
   }
 
-  MoodFace _getMoodFace(PetState s) {
-    if (s.mood >= 76 && s.energy >= 40 && s.hunger <= 55) return MoodFace.happy;
-    if (s.mood < 35 || s.energy < 25 || s.hunger > 82) return MoodFace.sad;
-    if (s.energy < 40 || s.hunger > 66) return MoodFace.tired;
-    return MoodFace.normal;
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
   }
 
-  void _applyAction(PetAction action) {
-    final beforeStage = _getGrowthStage(pet);
-
+  void _startGame() {
     setState(() {
-      switch (action) {
-        case PetAction.feed:
-          pet.hunger = (pet.hunger - 24).clamp(0, 100);
-          pet.mood = (pet.mood + 6).clamp(0, 100);
-          pet.bond = (pet.bond + 2).clamp(0, 100);
-          break;
-        case PetAction.walk:
-          pet.energy = (pet.energy - 15).clamp(0, 100);
-          pet.mood = (pet.mood + 14).clamp(0, 100);
-          pet.bond = (pet.bond + 5).clamp(0, 100);
-          break;
-        case PetAction.play:
-          pet.energy = (pet.energy - 10).clamp(0, 100);
-          pet.mood = (pet.mood + 12).clamp(0, 100);
-          pet.bond = (pet.bond + 4).clamp(0, 100);
-          break;
-        case PetAction.rest:
-          pet.energy = (pet.energy + 19).clamp(0, 100);
-          pet.mood = (pet.mood + 3).clamp(0, 100);
-          break;
-      }
-      pet.care7d = (pet.care7d + 0.03).clamp(0.0, 1.0);
-      pet.care14d = (pet.care14d + 0.02).clamp(0.0, 1.0);
+      playing = true;
+      score = 0;
+      hearts = 3;
+      _spawnItem();
     });
+  }
 
-    final afterStage = _getGrowthStage(pet);
-    if (afterStage != beforeStage && mounted) {
-      final messenger = ScaffoldMessenger.of(context);
-      messenger.hideCurrentSnackBar();
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text('우리 버디가 성장했어요! (${afterStage.name})'),
-          behavior: SnackBarBehavior.floating,
-          margin: EdgeInsets.fromLTRB(12, 0, 12, 20 + MediaQuery.of(context).padding.bottom),
-        ),
-      );
-    }
+  void _spawnItem() {
+    itemX = _random.nextDouble() * 0.8 + 0.1;
+    itemY = -0.15;
+    isGolden = _random.nextDouble() < 0.14;
+    speed = 0.007 + (_random.nextDouble() * 0.004) + (score * 0.00006);
+  }
+
+  void _tick() {
+    if (!playing) return;
+    setState(() {
+      itemY += speed;
+      if (itemY > 1.15) {
+        hearts -= 1;
+        if (hearts <= 0) {
+          playing = false;
+          bestScore = math.max(bestScore, score);
+        }
+        _spawnItem();
+      }
+    });
+  }
+
+  void _tapItem() {
+    if (!playing) return;
+    setState(() {
+      score += isGolden ? 5 : 1;
+      if (score % 10 == 0 && hearts < 5) hearts += 1;
+      _spawnItem();
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    final stage = _getGrowthStage(pet);
-    final mood = _getMoodFace(pet);
+    final ping = pings[selected];
 
     return Scaffold(
-      appBar: AppBar(title: const Text('BuddyPaw'), centerTitle: true),
+      appBar: AppBar(
+        title: const Text('티니핑 월드'),
+        centerTitle: true,
+      ),
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
+          padding: const EdgeInsets.all(14),
           child: Column(
             children: [
-              Expanded(
-                child: Container(
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(20),
-                    gradient: const LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [Color(0xFFF9F2E8), Color(0xFFECDCC7)],
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.08),
-                        blurRadius: 12,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      SizedBox(
-                        width: double.infinity,
-                        height: 230,
-                        child: AnimatedDog(stage: stage, mood: mood),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        '성장 단계: ${stage.name}   ·   현재 기분: ${mood.name}',
-                        style: const TextStyle(fontWeight: FontWeight.w700),
-                      ),
-                    ],
-                  ),
+              _buildTopPanel(ping),
+              const SizedBox(height: 10),
+              _buildCharacterPicker(),
+              const SizedBox(height: 10),
+              Expanded(child: _buildGameField(ping)),
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: _startGame,
+                  icon: Icon(playing ? Icons.refresh : Icons.play_arrow),
+                  label: Text(playing ? '다시 시작' : '게임 시작'),
                 ),
-              ),
-              const SizedBox(height: 12),
-              _StatBar(label: '배고픔', value: pet.hunger, color: Colors.redAccent),
-              _StatBar(label: '기분', value: pet.mood, color: Colors.pinkAccent),
-              _StatBar(label: '에너지', value: pet.energy, color: Colors.blueAccent),
-              _StatBar(label: '유대감', value: pet.bond, color: Colors.green),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  FilledButton(onPressed: () => _applyAction(PetAction.feed), child: const Text('밥주기')),
-                  FilledButton(onPressed: () => _applyAction(PetAction.walk), child: const Text('산책')),
-                  FilledButton(onPressed: () => _applyAction(PetAction.play), child: const Text('놀아주기')),
-                  FilledButton(onPressed: () => _applyAction(PetAction.rest), child: const Text('쉬기')),
-                ],
               ),
             ],
           ),
@@ -186,415 +146,166 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
-}
 
-class AnimatedDog extends StatefulWidget {
-  final GrowthStage stage;
-  final MoodFace mood;
-
-  const AnimatedDog({super.key, required this.stage, required this.mood});
-
-  @override
-  State<AnimatedDog> createState() => _AnimatedDogState();
-}
-
-class _AnimatedDogState extends State<AnimatedDog> with SingleTickerProviderStateMixin {
-  late final AnimationController _ctrl;
-  final List<Offset> _path = const [
-    Offset(1.2, 2.4),
-    Offset(4.7, 2.1),
-    Offset(6.2, 4.9),
-    Offset(3.7, 6.7),
-    Offset(1.1, 5.0),
-  ];
-
-  @override
-  void initState() {
-    super.initState();
-    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 6200))..repeat();
-  }
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  double _stageScale(GrowthStage s) => switch (s) {
-        GrowthStage.baby => 0.88,
-        GrowthStage.junior => 1.0,
-        GrowthStage.adult => 1.15,
-      };
-
-  Offset _pointAt(double t) {
-    final seg = t * _path.length;
-    final i = seg.floor() % _path.length;
-    final j = (i + 1) % _path.length;
-    final localT = Curves.easeInOut.transform(seg - seg.floor());
-    return Offset.lerp(_path[i], _path[j], localT)!;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (_, constraints) {
-        const tileW = 58.0;
-        const tileH = 29.0;
-        final origin = Offset(constraints.maxWidth / 2, 48);
-
-        Offset isoToScreen(Offset w) {
-          return Offset(
-            origin.dx + (w.dx - w.dy) * (tileW / 2),
-            origin.dy + (w.dx + w.dy) * (tileH / 2),
-          );
-        }
-
-        return AnimatedBuilder(
-          animation: _ctrl,
-          builder: (_, __) {
-            final t = _ctrl.value;
-            final now = _pointAt(t);
-            final prev = _pointAt((t - 0.01) % 1.0);
-            final dir = now - prev;
-            final facingRight = dir.dx >= 0;
-            final heading = math.atan2(dir.dy, dir.dx);
-
-            final dogScreen = isoToScreen(now);
-            final stageScale = _stageScale(widget.stage);
-            final gait = math.sin(t * math.pi * 14);
-            final breath = math.sin(t * math.pi * 2) * 1.2;
-
-            final props = [
-              _IsoProp(world: const Offset(5.9, 1.2), type: _PropType.tree),
-              _IsoProp(world: const Offset(2.0, 5.8), type: _PropType.stone),
-              _IsoProp(world: const Offset(6.6, 5.6), type: _PropType.tree),
-            ]..sort((a, b) => a.world.dy.compareTo(b.world.dy));
-
-            return Stack(
-              children: [
-                Positioned.fill(
-                  child: CustomPaint(
-                    painter: _IsoGroundPainter(tileW: tileW, tileH: tileH, origin: origin),
-                  ),
-                ),
-                ...props.map((p) {
-                  final s = isoToScreen(p.world);
-                  return Positioned(
-                    left: s.dx - 18,
-                    top: s.dy - 38,
-                    child: CustomPaint(
-                      size: const Size(36, 40),
-                      painter: _PropPainter(type: p.type),
-                    ),
-                  );
-                }),
-                Positioned(
-                  left: dogScreen.dx - 72 * stageScale,
-                  top: dogScreen.dy - 105 * stageScale,
-                  child: Transform.scale(
-                    scale: stageScale,
-                    child: Transform.translate(
-                      offset: Offset(0, breath),
-                      child: CustomPaint(
-                        size: const Size(146, 122),
-                        painter: _DogPainter(
-                          mood: widget.mood,
-                          gait: gait,
-                          heading: heading,
-                          facingRight: facingRight,
-                          tail: math.sin(t * math.pi * 8) * 0.24,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-  }
-}
-
-class _IsoProp {
-  final Offset world;
-  final _PropType type;
-
-  _IsoProp({required this.world, required this.type});
-}
-
-enum _PropType { tree, stone }
-
-class _PropPainter extends CustomPainter {
-  final _PropType type;
-
-  _PropPainter({required this.type});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (type == _PropType.tree) {
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(const Rect.fromLTWH(14, 20, 8, 18), const Radius.circular(3)),
-        Paint()..color = const Color(0xFF6D4C41),
-      );
-      canvas.drawCircle(const Offset(18, 12), 12, Paint()..color = const Color(0xFF4E7E43));
-      canvas.drawCircle(const Offset(11, 15), 7, Paint()..color = const Color(0xFF5D8E4E));
-      canvas.drawCircle(const Offset(25, 15), 7, Paint()..color = const Color(0xFF5D8E4E));
-    } else {
-      final rock = Path()
-        ..moveTo(6, 30)
-        ..lineTo(13, 19)
-        ..lineTo(26, 18)
-        ..lineTo(31, 28)
-        ..lineTo(22, 35)
-        ..lineTo(10, 35)
-        ..close();
-      canvas.drawPath(rock, Paint()..color = const Color(0xFF8D8D8D));
-      canvas.drawPath(
-        rock,
-        Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1.2
-          ..color = const Color(0xFF6E6E6E),
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _PropPainter oldDelegate) => oldDelegate.type != type;
-}
-
-class _DogPainter extends CustomPainter {
-  final MoodFace mood;
-  final double gait;
-  final double heading;
-  final bool facingRight;
-  final double tail;
-
-  _DogPainter({
-    required this.mood,
-    required this.gait,
-    required this.heading,
-    required this.facingRight,
-    required this.tail,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final body = Paint()..color = const Color(0xFFAD6C3B);
-    final light = Paint()..color = const Color(0xFFD39A62);
-    final dark = Paint()..color = const Color(0xFF3A2618);
-
-    final dirKey = (((heading + math.pi) / (math.pi / 4)).round() % 8);
-    final frontView = dirKey == 1 || dirKey == 2 || dirKey == 3;
-    final backView = dirKey == 5 || dirKey == 6 || dirKey == 7;
-
-    canvas.save();
-    if (!facingRight) {
-      canvas.translate(size.width, 0);
-      canvas.scale(-1, 1);
-    }
-
-    final shadowW = frontView || backView ? 66.0 : 84.0;
-    final shadow = RRect.fromRectAndRadius(Rect.fromLTWH(72 - shadowW / 2, 104, shadowW, 10), const Radius.circular(99));
-    canvas.drawRRect(shadow, Paint()..color = Colors.black.withOpacity(0.24));
-
-    void leg(double x, double phase, bool front) {
-      final amp = frontView || backView ? 2.4 : 3.6;
-      final lift = math.sin(phase) * amp;
-      final y = front ? 72.0 : 76.0;
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(Rect.fromLTWH(x, y + lift, 11, 28), const Radius.circular(7)),
-        body,
-      );
-      canvas.drawCircle(Offset(x + 5.5, 103 + lift), 4.2, dark);
-    }
-
-    leg(58, gait, true);
-    leg(74, gait + math.pi, true);
-    leg(90, gait + math.pi, false);
-    leg(105, gait, false);
-
-    final torsoW = frontView || backView ? 62.0 : 76.0;
-    final torsoX = frontView || backView ? 51.0 : 44.0;
-    final torso = RRect.fromRectAndRadius(Rect.fromLTWH(torsoX, 46, torsoW, 43), const Radius.circular(22));
-    canvas.drawRRect(torso, body);
-    canvas.drawOval(Rect.fromLTWH(torsoX + 8, 58, torsoW - 20, 24), light);
-
-    canvas.save();
-    canvas.translate(frontView ? 98 : 118, 66);
-    canvas.rotate(tail * (backView ? 0.7 : 1.0));
-    final tailPath = Path()
-      ..moveTo(0, 0)
-      ..quadraticBezierTo(18, -6, 28, -2)
-      ..quadraticBezierTo(22, 6, 0, 6)
-      ..close();
-    canvas.drawPath(tailPath, body);
-    canvas.restore();
-
-    if (frontView) {
-      final head = RRect.fromRectAndRadius(const Rect.fromLTWH(30, 24, 46, 44), const Radius.circular(18));
-      canvas.drawRRect(head, light);
-      canvas.drawCircle(const Offset(42, 37), 3.2, dark);
-      canvas.drawCircle(const Offset(64, 37), 3.2, dark);
-      canvas.drawCircle(const Offset(53, 46), 3.5, Paint()..color = const Color(0xFF1E1712));
-    } else if (backView) {
-      final headBack = RRect.fromRectAndRadius(const Rect.fromLTWH(28, 24, 50, 40), const Radius.circular(18));
-      canvas.drawRRect(headBack, body);
-      canvas.drawCircle(const Offset(34, 28), 4, dark);
-      canvas.drawCircle(const Offset(72, 28), 4, dark);
-    } else {
-      final head = Path()
-        ..moveTo(20, 42)
-        ..quadraticBezierTo(20, 18, 44, 14)
-        ..quadraticBezierTo(70, 14, 75, 38)
-        ..quadraticBezierTo(76, 61, 52, 66)
-        ..quadraticBezierTo(28, 68, 20, 52)
-        ..close();
-      canvas.drawPath(head, light);
-
-      final ear1 = Path()
-        ..moveTo(34, 24)
-        ..lineTo(30, 2)
-        ..lineTo(46, 18)
-        ..close();
-      final ear2 = Path()
-        ..moveTo(60, 25)
-        ..lineTo(56, 5)
-        ..lineTo(70, 21)
-        ..close();
-      canvas.drawPath(ear1, body);
-      canvas.drawPath(ear2, body);
-
-      final muzzle = RRect.fromRectAndRadius(const Rect.fromLTWH(40, 40, 22, 16), const Radius.circular(8));
-      canvas.drawRRect(muzzle, Paint()..color = const Color(0xFFE9B98A));
-
-      canvas.drawCircle(const Offset(44, 34), 3.4, dark);
-      canvas.drawCircle(const Offset(58, 34), 3.4, dark);
-      canvas.drawCircle(const Offset(51, 44), 3.5, Paint()..color = const Color(0xFF1E1712));
-    }
-
-    if (!backView) {
-      final mouth = Path();
-      switch (mood) {
-        case MoodFace.happy:
-          mouth
-            ..moveTo(44, 50)
-            ..quadraticBezierTo(51, 56, 59, 50);
-          break;
-        case MoodFace.sad:
-          mouth
-            ..moveTo(44, 54)
-            ..quadraticBezierTo(51, 49, 59, 54);
-          break;
-        case MoodFace.tired:
-          mouth
-            ..moveTo(44, 52)
-            ..lineTo(59, 52);
-          break;
-        case MoodFace.normal:
-          mouth
-            ..moveTo(44, 51)
-            ..quadraticBezierTo(51, 53, 59, 51);
-          break;
-      }
-      canvas.drawPath(
-        mouth,
-        Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 2
-          ..strokeCap = StrokeCap.round
-          ..color = dark.color,
-      );
-    }
-
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(const Rect.fromLTWH(40, 63, 38, 8), const Radius.circular(4)),
-      Paint()..color = const Color(0xFF2E7D32),
-    );
-    canvas.drawCircle(const Offset(79, 67), 3.2, Paint()..color = const Color(0xFFFFD54F));
-
-    canvas.restore();
-  }
-
-  @override
-  bool shouldRepaint(covariant _DogPainter oldDelegate) {
-    return oldDelegate.gait != gait ||
-        oldDelegate.tail != tail ||
-        oldDelegate.heading != heading ||
-        oldDelegate.facingRight != facingRight ||
-        oldDelegate.mood != mood;
-  }
-}
-
-class _IsoGroundPainter extends CustomPainter {
-  final double tileW;
-  final double tileH;
-  final Offset origin;
-
-  _IsoGroundPainter({required this.tileW, required this.tileH, required this.origin});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final tileA = Paint()..color = const Color(0xFFD2C2A9);
-    final tileB = Paint()..color = const Color(0xFFC5B396);
-    final stroke = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 0.7
-      ..color = const Color(0x556E5B47);
-
-    Path diamond(Offset c) => Path()
-      ..moveTo(c.dx, c.dy - tileH / 2)
-      ..lineTo(c.dx + tileW / 2, c.dy)
-      ..lineTo(c.dx, c.dy + tileH / 2)
-      ..lineTo(c.dx - tileW / 2, c.dy)
-      ..close();
-
-    for (int y = 0; y < 8; y++) {
-      for (int x = 0; x < 8; x++) {
-        final c = Offset(
-          origin.dx + (x - y) * (tileW / 2),
-          origin.dy + (x + y) * (tileH / 2),
-        );
-        final p = diamond(c);
-        canvas.drawPath(p, (x + y).isEven ? tileA : tileB);
-        canvas.drawPath(p, stroke);
-      }
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _IsoGroundPainter oldDelegate) => false;
-}
-
-class _StatBar extends StatelessWidget {
-  final String label;
-  final int value;
-  final Color color;
-
-  const _StatBar({required this.label, required this.value, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    final v = value.clamp(0, 100).toDouble();
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
+  Widget _buildTopPanel(Tiniping ping) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: ping.color.withOpacity(0.22),
+        borderRadius: BorderRadius.circular(16),
+      ),
       child: Row(
         children: [
-          SizedBox(width: 64, child: Text(label)),
+          CircleAvatar(
+            radius: 22,
+            backgroundColor: ping.color,
+            child: Text(ping.emoji, style: const TextStyle(fontSize: 20)),
+          ),
+          const SizedBox(width: 12),
           Expanded(
-            child: LinearProgressIndicator(
-              value: v / 100,
-              minHeight: 10,
-              borderRadius: BorderRadius.circular(8),
-              color: color,
-              backgroundColor: color.withOpacity(0.2),
+            child: Text(
+              '${ping.name}와 하트를 모아 보세요',
+              style: const TextStyle(fontWeight: FontWeight.w700),
             ),
           ),
-          const SizedBox(width: 8),
-          SizedBox(width: 36, child: Text('$value')),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text('점수 $score', style: const TextStyle(fontWeight: FontWeight.bold)),
+              Text('최고 $bestScore'),
+              Text('목숨 $hearts'),
+            ],
+          )
         ],
+      ),
+    );
+  }
+
+  Widget _buildCharacterPicker() {
+    return SizedBox(
+      height: 58,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemBuilder: (_, i) {
+          final ping = pings[i];
+          final active = i == selected;
+          return ChoiceChip(
+            label: Text('${ping.emoji} ${ping.name}'),
+            selected: active,
+            onSelected: (_) => setState(() => selected = i),
+          );
+        },
+        separatorBuilder: (_, __) => const SizedBox(width: 6),
+        itemCount: pings.length,
+      ),
+    );
+  }
+
+  Widget _buildGameField(Tiniping ping) {
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            ping.color.withOpacity(0.35),
+            const Color(0xFFFFF2FA),
+          ],
+        ),
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final w = constraints.maxWidth;
+          final h = constraints.maxHeight;
+          final px = w * itemX;
+          final py = h * itemY;
+
+          return Stack(
+            children: [
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: Container(
+                  height: h * 0.23,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFE0F0),
+                    borderRadius: const BorderRadius.vertical(bottom: Radius.circular(20)),
+                    border: Border(top: BorderSide(color: Colors.white.withOpacity(0.8), width: 2)),
+                  ),
+                ),
+              ),
+              Positioned(
+                left: w * 0.5 - 44,
+                bottom: h * 0.06,
+                child: _heroAvatar(ping),
+              ),
+              Positioned(
+                left: px - 24,
+                top: py,
+                child: GestureDetector(
+                  onTap: _tapItem,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 120),
+                    width: isGolden ? 52 : 48,
+                    height: isGolden ? 52 : 48,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: isGolden ? const Color(0xFFFFD54F) : const Color(0xFFFF6FAE),
+                      boxShadow: [
+                        BoxShadow(
+                          color: (isGolden ? Colors.amber : Colors.pink).withOpacity(0.45),
+                          blurRadius: 14,
+                        ),
+                      ],
+                    ),
+                    child: Center(
+                      child: Text(isGolden ? '✨' : '💗', style: const TextStyle(fontSize: 24)),
+                    ),
+                  ),
+                ),
+              ),
+              if (!playing)
+                Center(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.86),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Text(
+                      hearts <= 0 ? '게임 종료\n다시 시작해 주세요' : '시작 버튼을 눌러 플레이해 주세요',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _heroAvatar(Tiniping ping) {
+    return Container(
+      width: 88,
+      height: 88,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: ping.color,
+        border: Border.all(color: Colors.white, width: 4),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 10),
+        ],
+      ),
+      child: Center(
+        child: Text(
+          ping.emoji,
+          style: const TextStyle(fontSize: 38),
+        ),
       ),
     );
   }
