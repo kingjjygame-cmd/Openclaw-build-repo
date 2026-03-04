@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 void main() {
@@ -132,7 +133,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(Icons.pets, size: 120, color: Colors.brown),
+                    AnimatedDog(stage: stage, mood: mood),
                     const SizedBox(height: 8),
                     Text(
                       'Stage: ${stage.name} | Mood: ${mood.name}',
@@ -161,6 +162,180 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
       ),
+    );
+  }
+}
+
+class AnimatedDog extends StatefulWidget {
+  final GrowthStage stage;
+  final MoodFace mood;
+
+  const AnimatedDog({super.key, required this.stage, required this.mood});
+
+  @override
+  State<AnimatedDog> createState() => _AnimatedDogState();
+}
+
+class _AnimatedDogState extends State<AnimatedDog> with TickerProviderStateMixin {
+  late final AnimationController _bobController;
+  late final AnimationController _tailController;
+
+  @override
+  void initState() {
+    super.initState();
+    _bobController = AnimationController(vsync: this, duration: const Duration(milliseconds: 1400))
+      ..repeat(reverse: true);
+    _tailController = AnimationController(vsync: this, duration: const Duration(milliseconds: 380))
+      ..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _bobController.dispose();
+    _tailController.dispose();
+    super.dispose();
+  }
+
+  double _stageScale(GrowthStage s) {
+    switch (s) {
+      case GrowthStage.baby:
+        return 0.9;
+      case GrowthStage.junior:
+        return 1.05;
+      case GrowthStage.adult:
+        return 1.2;
+    }
+  }
+
+  String _face(MoodFace m) {
+    switch (m) {
+      case MoodFace.happy:
+        return '^ᴥ^';
+      case MoodFace.normal:
+        return '•ᴥ•';
+      case MoodFace.tired:
+        return '-ᴥ-';
+      case MoodFace.sad:
+        return 'TᴥT';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scale = _stageScale(widget.stage);
+
+    return AnimatedBuilder(
+      animation: Listenable.merge([_bobController, _tailController]),
+      builder: (context, child) {
+        final bob = math.sin(_bobController.value * math.pi) * 6;
+        final tailAngle = (widget.mood == MoodFace.sad ? 0.05 : 0.22) * (1 - (_tailController.value * 2 - 1).abs());
+
+        return Transform.translate(
+          offset: Offset(0, -bob),
+          child: Transform.scale(
+            scale: scale,
+            child: SizedBox(
+              width: 190,
+              height: 170,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  Positioned(
+                    right: 24,
+                    top: 92,
+                    child: Transform.rotate(
+                      angle: tailAngle,
+                      alignment: Alignment.topLeft,
+                      child: Container(
+                        width: 46,
+                        height: 12,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFC68642),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    top: 84,
+                    child: Container(
+                      width: 110,
+                      height: 62,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFD89A5B),
+                        borderRadius: BorderRadius.circular(40),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    top: 26,
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        Container(
+                          width: 120,
+                          height: 100,
+                          decoration: const BoxDecoration(
+                            color: Color(0xFFE7B27A),
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        Positioned(
+                          top: 12,
+                          left: 18,
+                          child: Transform.rotate(
+                            angle: -0.45,
+                            child: Container(
+                              width: 24,
+                              height: 34,
+                              decoration: const BoxDecoration(
+                                color: Color(0xFFC68642),
+                                borderRadius: BorderRadius.only(
+                                  topLeft: Radius.circular(16),
+                                  topRight: Radius.circular(16),
+                                  bottomLeft: Radius.circular(16),
+                                  bottomRight: Radius.circular(4),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        Positioned(
+                          top: 12,
+                          right: 18,
+                          child: Transform.rotate(
+                            angle: 0.45,
+                            child: Container(
+                              width: 24,
+                              height: 34,
+                              decoration: const BoxDecoration(
+                                color: Color(0xFFC68642),
+                                borderRadius: BorderRadius.only(
+                                  topLeft: Radius.circular(16),
+                                  topRight: Radius.circular(16),
+                                  bottomLeft: Radius.circular(4),
+                                  bottomRight: Radius.circular(16),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        Positioned(
+                          top: 38,
+                          child: Text(
+                            _face(widget.mood),
+                            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
