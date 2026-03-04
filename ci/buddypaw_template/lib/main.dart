@@ -119,10 +119,11 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       appBar: AppBar(title: const Text('BuddyPaw'), centerTitle: true),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
+          child: Column(
+            children: [
             Expanded(
               child: Container(
                 width: double.infinity,
