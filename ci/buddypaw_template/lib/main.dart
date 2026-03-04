@@ -107,8 +107,19 @@ class _HomeScreenState extends State<HomeScreen> {
 
     final afterStage = _getGrowthStage(pet);
     if (afterStage != beforeStage && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('우리 버디가 성장했어요! (${afterStage.name}) 🐾')),
+      final messenger = ScaffoldMessenger.of(context);
+      messenger.hideCurrentSnackBar();
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('우리 버디가 성장했어요! (${afterStage.name}) 🐾'),
+          behavior: SnackBarBehavior.floating,
+          margin: EdgeInsets.fromLTRB(
+            12,
+            0,
+            12,
+            20 + MediaQuery.of(context).padding.bottom,
+          ),
+        ),
       );
     }
   }
