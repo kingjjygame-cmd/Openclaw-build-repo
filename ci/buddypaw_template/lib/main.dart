@@ -1,310 +1,1177 @@
-import 'dart:math' as math;
+// build: asset-bundle-verify-v2
+import 'dart:async';
+import 'dart:math';
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 
-void main() => runApp(const TinipingGameApp());
+void main() {
+  runApp(const TinyPingQuizApp());
+}
 
-class TinipingGameApp extends StatelessWidget {
-  const TinipingGameApp({super.key});
+class TinyPingQuizApp extends StatelessWidget {
+  const TinyPingQuizApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: '티니핑 월드',
+      title: '티니핑 이름 맞추기',
       theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFFFF6FB7)),
         useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFFFF66A6)),
       ),
-      home: const TinipingGameScreen(),
+      home: const StartPage(),
     );
   }
 }
 
-class Tiniping {
+class Character {
   final String name;
-  final Color color;
-  final String emoji;
+  final String assetPath;
 
-  const Tiniping(this.name, this.color, this.emoji);
+  const Character({required this.name, required this.assetPath});
 }
 
-class TinipingGameScreen extends StatefulWidget {
-  const TinipingGameScreen({super.key});
+const int questionsPerStage = 10;
 
-  @override
-  State<TinipingGameScreen> createState() => _TinipingGameScreenState();
+enum QuizMode { unlimited, timed, quickNoTimer }
+enum StageFlow { singleDifficulty, allDifficulties }
+
+enum DifficultyStage { easy, basic, medium, hard }
+
+int secondsForStage(DifficultyStage stage) {
+  switch (stage) {
+    case DifficultyStage.easy:
+      return 10;
+    case DifficultyStage.basic:
+      return 7;
+    case DifficultyStage.medium:
+      return 5;
+    case DifficultyStage.hard:
+      return 3;
+  }
 }
 
-class _TinipingGameScreenState extends State<TinipingGameScreen>
-    with SingleTickerProviderStateMixin {
-  final List<Tiniping> pings = const [
-    Tiniping('하츄핑', Color(0xFFFF8FB8), '💖'),
-    Tiniping('차밍핑', Color(0xFFFFB3D1), '✨'),
-    Tiniping('깜빡핑', Color(0xFF9D8CFF), '🌙'),
-    Tiniping('반짝핑', Color(0xFFFFD166), '⭐'),
-  ];
-
-  int selected = 0;
-  int score = 0;
-  int bestScore = 0;
-  int hearts = 3;
-  bool playing = false;
-
-  late final AnimationController _controller;
-  final math.Random _random = math.Random();
-
-  double itemX = 0.5;
-  double itemY = -0.15;
-  double speed = 0.008;
-  bool isGolden = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 16))
-      ..addListener(_tick)
-      ..repeat();
+String stageLabel(DifficultyStage stage) {
+  switch (stage) {
+    case DifficultyStage.easy:
+      return 'Easy';
+    case DifficultyStage.basic:
+      return 'Basic';
+    case DifficultyStage.medium:
+      return 'Medium';
+    case DifficultyStage.hard:
+      return 'Hard';
   }
+}
 
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
+String stageKidLabel(DifficultyStage stage) {
+  switch (stage) {
+    case DifficultyStage.easy:
+      return '쉬움';
+    case DifficultyStage.basic:
+      return '기본';
+    case DifficultyStage.medium:
+      return '보통';
+    case DifficultyStage.hard:
+      return '어려움';
   }
+}
 
-  void _startGame() {
-    setState(() {
-      playing = true;
-      score = 0;
-      hearts = 3;
-      _spawnItem();
-    });
+DifficultyStage? nextStage(DifficultyStage stage) {
+  switch (stage) {
+    case DifficultyStage.easy:
+      return DifficultyStage.basic;
+    case DifficultyStage.basic:
+      return DifficultyStage.medium;
+    case DifficultyStage.medium:
+      return DifficultyStage.hard;
+    case DifficultyStage.hard:
+      return null;
   }
+}
 
-  void _spawnItem() {
-    itemX = _random.nextDouble() * 0.8 + 0.1;
-    itemY = -0.15;
-    isGolden = _random.nextDouble() < 0.14;
-    speed = 0.007 + (_random.nextDouble() * 0.004) + (score * 0.00006);
+double revealFractionForStage(DifficultyStage stage) {
+  switch (stage) {
+    case DifficultyStage.easy:
+      return 0.40;
+    case DifficultyStage.basic:
+      return 0.32;
+    case DifficultyStage.medium:
+      return 0.24;
+    case DifficultyStage.hard:
+      return 0.16;
   }
+}
 
-  void _tick() {
-    if (!playing) return;
-    setState(() {
-      itemY += speed;
-      if (itemY > 1.15) {
-        hearts -= 1;
-        if (hearts <= 0) {
-          playing = false;
-          bestScore = math.max(bestScore, score);
+final List<Character> characters = [
+  const Character(name: '하츄핑', assetPath: 'assets/images/hachuping.webp'),
+  const Character(name: '사뿐핑', assetPath: 'assets/images/claireping.png'),
+  const Character(name: '아름핑', assetPath: 'assets/images/graceping.png'),
+  const Character(name: '뽀니핑', assetPath: 'assets/images/bonnyping.png'),
+  const Character(name: '이클립스핑', assetPath: 'assets/images/eclipseping.png'),
+  const Character(name: '다이아나핑', assetPath: 'assets/images/dianaping.png'),
+  const Character(name: '뽀득핑', assetPath: 'assets/images/scrubping.png'),
+  const Character(name: '차밍핑', assetPath: 'assets/images/charmingping.png'),
+  const Character(name: '나비핑', assetPath: 'assets/images/flitterping.png'),
+  const Character(name: '실크핑', assetPath: 'assets/images/silkyping.png'),
+  const Character(name: '스노우핑', assetPath: 'assets/images/snowping.png'),
+  const Character(name: '이슬핑', assetPath: 'assets/images/dewping.png'),
+  const Character(name: '쿨쿨핑', assetPath: 'assets/images/dozyping.png'),
+  const Character(name: '롱롱핑', assetPath: 'assets/images/glossyping.png'),
+  const Character(name: '슈슈핑', assetPath: 'assets/images/rellaping.png'),
+  const Character(name: '큐핑', assetPath: 'assets/images/cupidping.png'),
+  const Character(name: '야옹핑', assetPath: 'assets/images/kittyping.png'),
+];
+
+class StartPage extends StatelessWidget {
+  const StartPage({super.key});
+
+  Future<void> _startSingleDifficulty(BuildContext context, QuizMode mode) async {
+    final selected = await showModalBottomSheet<DifficultyStage>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) {
+        Widget levelButton({
+          required DifficultyStage stage,
+          required String emoji,
+          required String hint,
+          required Color color,
+        }) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: FilledButton(
+              onPressed: () => Navigator.of(context).pop(stage),
+              style: FilledButton.styleFrom(
+                backgroundColor: color,
+                foregroundColor: Colors.white,
+                minimumSize: const Size.fromHeight(62),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              ),
+              child: Row(
+                children: [
+                  Text(emoji, style: const TextStyle(fontSize: 24)),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text('${stageKidLabel(stage)} (${stageLabel(stage)})', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+                        Text(hint, style: const TextStyle(fontSize: 13, color: Colors.white70)),
+                      ],
+                    ),
+                  ),
+                  const Icon(Icons.arrow_forward_ios_rounded, size: 16),
+                ],
+              ),
+            ),
+          );
         }
-        _spawnItem();
-      }
-    });
+
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('난이도를 골라주세요', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
+                const SizedBox(height: 4),
+                const Text('아이가 바로 이해할 수 있게 쉽게 고를 수 있어요', style: TextStyle(color: Colors.black54)),
+                const SizedBox(height: 14),
+                levelButton(
+                  stage: DifficultyStage.easy,
+                  emoji: '😊',
+                  hint: '아주 쉬움 · 많이 보여줘요 (40%)',
+                  color: const Color(0xFF42A5F5),
+                ),
+                if (mode == QuizMode.unlimited)
+                  levelButton(
+                    stage: DifficultyStage.basic,
+                    emoji: '🙂',
+                    hint: '기본 · 적당히 보여줘요 (32%)',
+                    color: const Color(0xFF26A69A),
+                  ),
+                levelButton(
+                  stage: DifficultyStage.medium,
+                  emoji: '😎',
+                  hint: '보통 · 덜 보여줘요 (24%)',
+                  color: const Color(0xFF7E57C2),
+                ),
+                levelButton(
+                  stage: DifficultyStage.hard,
+                  emoji: '🔥',
+                  hint: '어려움 · 조금만 보여줘요 (16%)',
+                  color: const Color(0xFFEF5350),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    if (selected == null || !context.mounted) return;
+
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (_) => QuizPage(
+          mode: mode,
+          flow: StageFlow.singleDifficulty,
+          fixedStage: selected,
+        ),
+      ),
+    );
   }
 
-  void _tapItem() {
-    if (!playing) return;
-    setState(() {
-      score += isGolden ? 5 : 1;
-      if (score % 10 == 0 && hearts < 5) hearts += 1;
-      _spawnItem();
-    });
+  void _startAllDifficulties(BuildContext context, QuizMode mode) {
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (_) => QuizPage(
+          mode: mode,
+          flow: StageFlow.allDifficulties,
+          fixedStage: null,
+        ),
+      ),
+    );
+  }
+
+  Widget _modeCard(BuildContext context, {required QuizMode mode, required Color color, required IconData icon, required String title, required String subtitle}) {
+    return Card(
+      elevation: 8,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Icon(icon, color: color),
+                const SizedBox(width: 8),
+                Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(subtitle, style: const TextStyle(color: Colors.black54)),
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              onPressed: () => _startSingleDifficulty(context, mode),
+              icon: const Icon(Icons.tune),
+              label: const Text('난이도 하나만 플레이'),
+            ),
+            const SizedBox(height: 8),
+            FilledButton.icon(
+              onPressed: () => _startAllDifficulties(context, mode),
+              style: FilledButton.styleFrom(backgroundColor: color, foregroundColor: Colors.white),
+              icon: const Icon(Icons.rocket_launch),
+              label: Text(mode == QuizMode.unlimited ? 'Easy → Basic → Medium → Hard' : 'Easy → Medium → Hard'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final ping = pings[selected];
+    return Scaffold(
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFFFF9ED2), Color(0xFFB39DDB)],
+          ),
+        ),
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: SingleChildScrollView(
+              child: Column(
+                children: [
+                  const SizedBox(height: 8),
+                  const Text('🩷 티니핑 퀴즈', style: TextStyle(fontSize: 38, fontWeight: FontWeight.w900, color: Colors.white)),
+                  const SizedBox(height: 10),
+                  const Text(
+                    '플레이 방식과 진행 모드를 골라주세요',
+                    style: TextStyle(fontSize: 17, color: Colors.white),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 18),
+                  _modeCard(
+                    context,
+                    mode: QuizMode.unlimited,
+                    color: const Color(0xFF5E35B1),
+                    icon: Icons.visibility,
+                    title: '일부만 보고 맞추기',
+                    subtitle: '원형으로 일부만 보여주고 맞히는 모드',
+                  ),
+                  _modeCard(
+                    context,
+                    mode: QuizMode.timed,
+                    color: const Color(0xFFEC407A),
+                    icon: Icons.timer,
+                    title: '빨리 맞추기',
+                    subtitle: '시간(10/5/3초) 안에 빠르게 맞히는 모드',
+                  ),
+                  Card(
+                    elevation: 8,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                    child: Padding(
+                      padding: const EdgeInsets.all(14),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          const Row(
+                            children: [
+                              Icon(Icons.flash_on, color: Color(0xFFFF8F00)),
+                              SizedBox(width: 8),
+                              Text('빨리 맞추기 (시간 없음)', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          const Text('시간 제한 없이 바로바로 맞히는 단일 난이도 모드', style: TextStyle(color: Colors.black54)),
+                          const SizedBox(height: 10),
+                          FilledButton.icon(
+                            onPressed: () {
+                              Navigator.of(context).pushReplacement(
+                                MaterialPageRoute(
+                                  builder: (_) => const QuizPage(
+                                    mode: QuizMode.quickNoTimer,
+                                    flow: StageFlow.singleDifficulty,
+                                    fixedStage: DifficultyStage.medium,
+                                  ),
+                                ),
+                              );
+                            },
+                            style: FilledButton.styleFrom(backgroundColor: const Color(0xFFFF8F00), foregroundColor: Colors.white),
+                            icon: const Icon(Icons.play_arrow_rounded),
+                            label: const Text('바로 시작'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class QuizPage extends StatefulWidget {
+  final QuizMode mode;
+  final StageFlow flow;
+  final DifficultyStage? fixedStage;
+
+  const QuizPage({
+    super.key,
+    required this.mode,
+    required this.flow,
+    required this.fixedStage,
+  });
+
+  @override
+  State<QuizPage> createState() => _QuizPageState();
+}
+
+class _QuizPageState extends State<QuizPage> {
+  final _rand = Random();
+  late List<int> _questionIndices;
+
+  DifficultyStage _stage = DifficultyStage.easy;
+  int _qInStage = 0;
+  int _totalScore = 0;
+
+  int _timeLeft = secondsForStage(DifficultyStage.easy);
+  Timer? _timer;
+  bool _answered = false;
+  String? _selectedChoice;
+  List<String> _choices = [];
+
+  bool _showReaction = false;
+  Color _reactionColor = Colors.purple;
+  String _reactionEmoji = '';
+  String _reactionText = '';
+
+  bool _showInlineResult = false;
+  Color _inlineResultColor = Colors.green;
+  String _inlineResultText = '';
+  Offset _spotlightCenterFactor = const Offset(0.5, 0.5);
+
+  List<DifficultyStage> _stagesForCurrentGame() {
+    if (widget.mode == QuizMode.unlimited) {
+      return [
+        DifficultyStage.easy,
+        DifficultyStage.basic,
+        DifficultyStage.medium,
+        DifficultyStage.hard,
+      ];
+    }
+    return [DifficultyStage.easy, DifficultyStage.medium, DifficultyStage.hard];
+  }
+
+  Offset _pickSpotlightCenterFactor() {
+    // 배경만 보이는 경우를 줄이기 위해, 캐릭터가 주로 배치되는 중앙 영역에서만 샘플링합니다.
+    // (요청사항: 공개 원형의 80% 이상이 캐릭터 영역에 오도록 하는 휴리스틱)
+    final maxDist = switch (_stage) {
+      DifficultyStage.easy => 0.17,
+      DifficultyStage.basic => 0.14,
+      DifficultyStage.medium => 0.12,
+      DifficultyStage.hard => 0.10,
+    };
+
+    for (int i = 0; i < 40; i++) {
+      final angle = _rand.nextDouble() * pi * 2;
+      final dist = _rand.nextDouble() * maxDist;
+      final x = 0.5 + cos(angle) * dist;
+      final y = 0.5 + sin(angle) * dist;
+      if (x >= 0.25 && x <= 0.75 && y >= 0.2 && y <= 0.8) {
+        return Offset(x, y);
+      }
+    }
+    return const Offset(0.5, 0.5);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _startNewGame();
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  void _prepareStageQuestions() {
+    _questionIndices = List.generate(characters.length, (i) => i)..shuffle(_rand);
+    if (_questionIndices.length > questionsPerStage) {
+      _questionIndices = _questionIndices.take(questionsPerStage).toList();
+    }
+    while (_questionIndices.length < questionsPerStage) {
+      _questionIndices.add(_rand.nextInt(characters.length));
+    }
+  }
+
+  void _startNewGame() {
+    _timer?.cancel();
+    _stage = widget.fixedStage ?? _stagesForCurrentGame().first;
+    _qInStage = 0;
+    _totalScore = 0;
+    _prepareStageQuestions();
+    _loadQuestion();
+  }
+
+  void _loadQuestion() {
+    _answered = false;
+    _selectedChoice = null;
+    _showInlineResult = false;
+    _inlineResultText = '';
+    _spotlightCenterFactor = _pickSpotlightCenterFactor();
+    _timeLeft = widget.mode == QuizMode.timed ? secondsForStage(_stage) : -1;
+
+    final target = characters[_questionIndices[_qInStage]];
+    final wrongNames = characters.where((c) => c.name != target.name).map((c) => c.name).toList()..shuffle(_rand);
+    _choices = [target.name, wrongNames[0], wrongNames[1]]..shuffle(_rand);
+
+    _timer?.cancel();
+    if (widget.mode == QuizMode.timed) {
+      _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+        if (!mounted) return;
+        setState(() => _timeLeft--);
+        if (_timeLeft <= 0) {
+          timer.cancel();
+          _handleTimeout();
+        }
+      });
+    }
+
+    setState(() {});
+  }
+
+  Future<void> _showFullscreenReaction({
+    required bool isCorrect,
+    String? answer,
+    bool isTimeout = false,
+  }) async {
+    setState(() {
+      _showReaction = true;
+      if (isTimeout) {
+        _reactionColor = const Color(0xFF37474F);
+        _reactionEmoji = '⏰⚡';
+        _reactionText = '시간 초과! 정답은 $answer';
+      } else if (isCorrect) {
+        _reactionColor = const Color(0xFF7B1FA2);
+        _reactionEmoji = '🌈🎉✨';
+        _reactionText = '정답!';
+      } else {
+        _reactionColor = const Color(0xFFC2185B);
+        _reactionEmoji = '💣😵‍💫❌';
+        _reactionText = '아쉽다! 정답은 $answer';
+      }
+    });
+
+    await Future.delayed(const Duration(milliseconds: 950));
+    if (!mounted) return;
+    setState(() => _showReaction = false);
+  }
+
+  Future<void> _handleTimeout() async {
+    if (_answered) return;
+    final answer = characters[_questionIndices[_qInStage]].name;
+    setState(() {
+      _answered = true;
+      _selectedChoice = null;
+    });
+
+    await _showFullscreenReaction(isCorrect: false, answer: answer, isTimeout: true);
+    await _goNext();
+  }
+
+  Future<void> _pick(String selected) async {
+    if (_answered) return;
+    final answer = characters[_questionIndices[_qInStage]].name;
+    final isCorrect = selected == answer;
+
+    setState(() {
+      _answered = true;
+      _selectedChoice = selected;
+      if (isCorrect) _totalScore++;
+    });
+
+    _timer?.cancel();
+
+    if (widget.mode == QuizMode.unlimited) {
+      setState(() {
+        _showInlineResult = true;
+        _inlineResultColor = isCorrect ? const Color(0xFF2E7D32) : const Color(0xFFC2185B);
+        _inlineResultText = isCorrect ? '정답!' : '오답! 정답은 $answer';
+      });
+      await Future.delayed(const Duration(milliseconds: 1200));
+      if (!mounted) return;
+      setState(() => _showInlineResult = false);
+      await _goNext();
+      return;
+    }
+
+    await _showFullscreenReaction(isCorrect: isCorrect, answer: answer);
+    await _goNext();
+  }
+
+  Future<void> _goNext() async {
+    if (!mounted) return;
+
+    if (_qInStage >= questionsPerStage - 1) {
+      final isSingleFlow = widget.flow == StageFlow.singleDifficulty;
+      final stages = _stagesForCurrentGame();
+      final currentIdx = stages.indexOf(_stage);
+      final upcoming = (!isSingleFlow && currentIdx >= 0 && currentIdx < stages.length - 1) ? stages[currentIdx + 1] : null;
+      if (upcoming == null) {
+        _timer?.cancel();
+        final totalQuestions = isSingleFlow ? questionsPerStage : questionsPerStage * stages.length;
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (_) => ResultPage(
+              score: _totalScore,
+              total: totalQuestions,
+              mode: widget.mode,
+              flow: widget.flow,
+              fixedStage: widget.fixedStage,
+            ),
+          ),
+        );
+        return;
+      }
+
+      final proceed = await Navigator.of(context).push<bool>(
+        MaterialPageRoute(
+          builder: (_) => StageTransitionPage(from: _stage, to: upcoming),
+        ),
+      );
+
+      if (!mounted || proceed != true) return;
+
+      setState(() {
+        _stage = upcoming;
+        _qInStage = 0;
+      });
+      _prepareStageQuestions();
+      _loadQuestion();
+      return;
+    }
+
+    setState(() => _qInStage++);
+    _loadQuestion();
+  }
+
+  String _modeTitle() {
+    switch (widget.mode) {
+      case QuizMode.unlimited:
+        return '일부만 보고 맞추기';
+      case QuizMode.timed:
+        return '빨리 맞추기';
+      case QuizMode.quickNoTimer:
+        return '빨리 맞추기 (시간 없음)';
+    }
+  }
+
+  String _flowTitle() {
+    if (widget.flow == StageFlow.singleDifficulty) {
+      return '${stageLabel(widget.fixedStage!)} 단일';
+    }
+    return widget.mode == QuizMode.unlimited ? 'Easy→Basic→Medium→Hard' : 'Easy→Medium→Hard';
+  }
+
+  DifficultyStage? _nextStageInFlow() {
+    if (widget.flow != StageFlow.allDifficulties) return null;
+    final stages = _stagesForCurrentGame();
+    final idx = stages.indexOf(_stage);
+    if (idx < 0 || idx >= stages.length - 1) return null;
+    return stages[idx + 1];
+  }
+
+  DifficultyStage? _prevStageInFlow() {
+    if (widget.flow != StageFlow.allDifficulties) return null;
+    final stages = _stagesForCurrentGame();
+    final idx = stages.indexOf(_stage);
+    if (idx <= 0) return null;
+    return stages[idx - 1];
+  }
+
+  Future<void> _jumpToNextStage() async {
+    final next = _nextStageInFlow();
+    if (next == null) return;
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('다음 단계로 넘어갈까요?'),
+        content: Text('지금 단계는 여기까지 하고, ${stageKidLabel(next)} 단계로 바로 시작해요.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('취소')),
+          FilledButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('이동')),
+        ],
+      ),
+    );
+
+    if (ok == true && mounted) {
+      _timer?.cancel();
+      setState(() {
+        _stage = next;
+        _qInStage = 0;
+      });
+      _prepareStageQuestions();
+      _loadQuestion();
+    }
+  }
+
+  Future<void> _jumpToPrevStage() async {
+    final prev = _prevStageInFlow();
+    if (prev == null) return;
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('이전 단계로 돌아갈까요?'),
+        content: Text('${stageKidLabel(prev)} 단계로 돌아가서 다시 플레이해요.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('취소')),
+          FilledButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('이동')),
+        ],
+      ),
+    );
+
+    if (ok == true && mounted) {
+      _timer?.cancel();
+      setState(() {
+        _stage = prev;
+        _qInStage = 0;
+      });
+      _prepareStageQuestions();
+      _loadQuestion();
+    }
+  }
+
+  Future<void> _goHome() async {
+    final shouldGo = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('초기 화면으로 이동할까요?'),
+        content: const Text('현재 진행 중인 게임은 종료됩니다.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('취소')),
+          FilledButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('이동')),
+        ],
+      ),
+    );
+
+    if (shouldGo == true && mounted) {
+      _timer?.cancel();
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const StartPage()),
+        (route) => false,
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final current = characters[_questionIndices[_qInStage]];
+    final answer = current.name;
+
+    Color? buttonBg(String choice) {
+      if (!_answered || _selectedChoice == null) return null;
+      if (choice == answer) return Colors.green;
+      if (choice == _selectedChoice) return Colors.red;
+      return Colors.grey.shade500;
+    }
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('티니핑 월드'),
+        title: Text('티니핑 이름 맞추기 · ${_modeTitle()}'),
         centerTitle: true,
-      ),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Column(
-            children: [
-              _buildTopPanel(ping),
-              const SizedBox(height: 10),
-              _buildCharacterPicker(),
-              const SizedBox(height: 10),
-              Expanded(child: _buildGameField(ping)),
-              const SizedBox(height: 10),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: _startGame,
-                  icon: Icon(playing ? Icons.refresh : Icons.play_arrow),
-                  label: Text(playing ? '다시 시작' : '게임 시작'),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTopPanel(Tiniping ping) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: ping.color.withOpacity(0.22),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        children: [
-          CircleAvatar(
-            radius: 22,
-            backgroundColor: ping.color,
-            child: Text(ping.emoji, style: const TextStyle(fontSize: 20)),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              '${ping.name}와 하트를 모아 보세요',
-              style: const TextStyle(fontWeight: FontWeight.w700),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: TextButton.icon(
+              onPressed: _goHome,
+              icon: const Icon(Icons.home_rounded),
+              label: const Text('처음으로'),
             ),
           ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text('점수 $score', style: const TextStyle(fontWeight: FontWeight.bold)),
-              Text('최고 $bestScore'),
-              Text('목숨 $hearts'),
-            ],
-          )
         ],
       ),
-    );
-  }
+      body: Stack(
+        children: [
+          SafeArea(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final imageHeight = (constraints.maxHeight * 0.38).clamp(180.0, 280.0);
 
-  Widget _buildCharacterPicker() {
-    return SizedBox(
-      height: 58,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemBuilder: (_, i) {
-          final ping = pings[i];
-          final active = i == selected;
-          return ChoiceChip(
-            label: Text('${ping.emoji} ${ping.name}'),
-            selected: active,
-            onSelected: (_) => setState(() => selected = i),
-          );
-        },
-        separatorBuilder: (_, __) => const SizedBox(width: 6),
-        itemCount: pings.length,
-      ),
-    );
-  }
+                return SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(minHeight: constraints.maxHeight - 28),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text(
+                          widget.mode == QuizMode.quickNoTimer
+                              ? '기본 난이도 · 문제 ${_qInStage + 1} / $questionsPerStage'
+                              : '${stageKidLabel(_stage)} (${stageLabel(_stage)}) · 문제 ${_qInStage + 1} / $questionsPerStage',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text('총점: $_totalScore'),
+                            Text(
+                              widget.mode == QuizMode.timed
+                                  ? '제한 시간: $_timeLeft초'
+                                  : (widget.mode == QuizMode.quickNoTimer ? '시간 제한 없음' : _flowTitle()),
+                            ),
+                          ],
+                        ),
+                        if (_prevStageInFlow() != null || _nextStageInFlow() != null) ...[
+                          const SizedBox(height: 8),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              if (_prevStageInFlow() != null)
+                                TextButton.icon(
+                                  onPressed: _jumpToPrevStage,
+                                  icon: const Icon(Icons.skip_previous_rounded),
+                                  label: const Text('이전 단계로 돌아가기'),
+                                )
+                              else
+                                const SizedBox(width: 8),
+                              if (_nextStageInFlow() != null)
+                                TextButton.icon(
+                                  onPressed: _jumpToNextStage,
+                                  icon: const Icon(Icons.skip_next_rounded),
+                                  label: const Text('다음 단계로 넘어가기'),
+                                ),
+                            ],
+                          ),
+                        ],
+                        const SizedBox(height: 14),
+                        SizedBox(
+                          height: imageHeight,
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(16),
+                            child: Container(
+                              color: Colors.pink.shade50,
+                              alignment: Alignment.center,
+                              child: LayoutBuilder(
+                                builder: (context, constraints2) {
+                                  final isUnlimited = widget.mode == QuizMode.unlimited;
+                                  final baseFraction = revealFractionForStage(_stage);
+                                  final image = Image.asset(
+                                    current.assetPath,
+                                    fit: BoxFit.contain,
+                                    errorBuilder: (context, error, stackTrace) => Column(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        const Icon(Icons.image_not_supported, size: 36),
+                                        const SizedBox(height: 8),
+                                        Text('${current.name} (이미지 로드 실패)'),
+                                      ],
+                                    ),
+                                  );
 
-  Widget _buildGameField(Tiniping ping) {
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            ping.color.withOpacity(0.35),
-            const Color(0xFFFFF2FA),
-          ],
-        ),
-      ),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final w = constraints.maxWidth;
-          final h = constraints.maxHeight;
-          final px = w * itemX;
-          final py = h * itemY;
+                                  if (!isUnlimited) return image;
 
-          return Stack(
-            children: [
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 0,
-                child: Container(
-                  height: h * 0.23,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFE0F0),
-                    borderRadius: const BorderRadius.vertical(bottom: Radius.circular(20)),
-                    border: Border(top: BorderSide(color: Colors.white.withOpacity(0.8), width: 2)),
-                  ),
-                ),
-              ),
-              Positioned(
-                left: w * 0.5 - 44,
-                bottom: h * 0.06,
-                child: _heroAvatar(ping),
-              ),
-              Positioned(
-                left: px - 24,
-                top: py,
-                child: GestureDetector(
-                  onTap: _tapItem,
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 120),
-                    width: isGolden ? 52 : 48,
-                    height: isGolden ? 52 : 48,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: isGolden ? const Color(0xFFFFD54F) : const Color(0xFFFF6FAE),
-                      boxShadow: [
-                        BoxShadow(
-                          color: (isGolden ? Colors.amber : Colors.pink).withOpacity(0.45),
-                          blurRadius: 14,
+                                  final minSide = min(constraints2.maxWidth, constraints2.maxHeight);
+
+                                  Widget masked(double fraction) {
+                                    final radius = (minSide * fraction / 2).clamp(20.0, minSide * 2);
+                                    return Stack(
+                                      fit: StackFit.expand,
+                                      children: [
+                                        image,
+                                        IgnorePointer(
+                                          child: CustomPaint(
+                                            painter: SpotlightMaskPainter(
+                                              center: Offset(
+                                                constraints2.maxWidth * _spotlightCenterFactor.dx,
+                                                constraints2.maxHeight * _spotlightCenterFactor.dy,
+                                              ),
+                                              radius: radius,
+                                            ),
+                                          ),
+                                        ),
+                                        if (!_answered)
+                                          Positioned(
+                                            top: 10,
+                                            left: 0,
+                                            right: 0,
+                                            child: Center(
+                                              child: Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.black54,
+                                                  borderRadius: BorderRadius.circular(20),
+                                                ),
+                                                child: Text(
+                                                  '원형 공개 ${(baseFraction * 100).round()}%',
+                                                  style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                      ],
+                                    );
+                                  }
+
+                                  if (!_answered) {
+                                    return masked(baseFraction);
+                                  }
+
+                                  return TweenAnimationBuilder<double>(
+                                    tween: Tween<double>(begin: baseFraction, end: 2.2),
+                                    duration: const Duration(milliseconds: 700),
+                                    curve: Curves.easeOutCubic,
+                                    builder: (context, animatedFraction, _) => masked(animatedFraction),
+                                  );
+                                },
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        ..._choices.map(
+                          (c) => Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
+                            child: FilledButton(
+                              onPressed: _answered ? null : () => _pick(c),
+                              style: FilledButton.styleFrom(
+                                minimumSize: const Size.fromHeight(50),
+                                backgroundColor: buttonBg(c),
+                              ),
+                              child: Text(c),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        OutlinedButton.icon(
+                          onPressed: _goHome,
+                          style: OutlinedButton.styleFrom(
+                            minimumSize: const Size.fromHeight(50),
+                            foregroundColor: const Color(0xFFC62828),
+                            side: const BorderSide(color: Color(0xFFC62828), width: 1.6),
+                          ),
+                          icon: const Icon(Icons.exit_to_app_rounded),
+                          label: const Text('모드 선택으로 나가기', style: TextStyle(fontWeight: FontWeight.bold)),
                         ),
                       ],
                     ),
-                    child: Center(
-                      child: Text(isGolden ? '✨' : '💗', style: const TextStyle(fontSize: 24)),
-                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          if (_showInlineResult)
+            Positioned(
+              top: 18,
+              left: 16,
+              right: 16,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                decoration: BoxDecoration(
+                  color: _inlineResultColor,
+                  borderRadius: BorderRadius.circular(14),
+                  boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 8)],
+                ),
+                child: Text(
+                  _inlineResultText,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w900),
+                ),
+              ),
+            ),
+          AnimatedOpacity(
+            opacity: _showReaction ? 1 : 0,
+            duration: const Duration(milliseconds: 180),
+            child: IgnorePointer(
+              ignoring: !_showReaction,
+              child: Container(
+                color: _reactionColor.withOpacity(0.82),
+                width: double.infinity,
+                height: double.infinity,
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(_reactionEmoji, style: const TextStyle(fontSize: 56)),
+                      const SizedBox(height: 14),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 24),
+                        child: Text(
+                          _reactionText,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 26,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
-              if (!playing)
-                Center(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.86),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Text(
-                      hearts <= 0 ? '게임 종료\n다시 시작해 주세요' : '시작 버튼을 눌러 플레이해 주세요',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                  ),
-                ),
-            ],
-          );
-        },
+            ),
+          ),
+        ],
       ),
     );
   }
+}
 
-  Widget _heroAvatar(Tiniping ping) {
-    return Container(
-      width: 88,
-      height: 88,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: ping.color,
-        border: Border.all(color: Colors.white, width: 4),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 10),
-        ],
+class SpotlightMaskPainter extends CustomPainter {
+  final Offset center;
+  final double radius;
+
+  SpotlightMaskPainter({required this.center, required this.radius});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final layerRect = Offset.zero & size;
+    canvas.saveLayer(layerRect, Paint());
+
+    final overlay = Paint()..color = Colors.white;
+    canvas.drawRect(layerRect, overlay);
+
+    final clearPaint = Paint()..blendMode = ui.BlendMode.clear;
+    canvas.drawCircle(center, radius, clearPaint);
+
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(covariant SpotlightMaskPainter oldDelegate) {
+    return oldDelegate.center != center || oldDelegate.radius != radius;
+  }
+}
+
+class StageTransitionPage extends StatefulWidget {
+  final DifficultyStage from;
+  final DifficultyStage to;
+
+  const StageTransitionPage({super.key, required this.from, required this.to});
+
+  @override
+  State<StageTransitionPage> createState() => _StageTransitionPageState();
+}
+
+class _StageTransitionPageState extends State<StageTransitionPage> {
+  int _count = 3;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) return;
+      if (_count == 1) {
+        timer.cancel();
+        Navigator.of(context).pop(true);
+        return;
+      }
+      setState(() => _count--);
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFF7E57C2), Color(0xFFEC407A)],
+          ),
+        ),
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('LEVEL UP!', style: TextStyle(color: Colors.white, fontSize: 44, fontWeight: FontWeight.w900)),
+              const SizedBox(height: 12),
+              Text(
+                '${stageLabel(widget.from)} 완료\n${stageLabel(widget.to)} 시작!',
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 24),
+              Text('$_count', style: const TextStyle(color: Colors.white, fontSize: 72, fontWeight: FontWeight.bold)),
+            ],
+          ),
+        ),
       ),
-      child: Center(
-        child: Text(
-          ping.emoji,
-          style: const TextStyle(fontSize: 38),
+    );
+  }
+}
+
+class ResultPage extends StatelessWidget {
+  final int score;
+  final int total;
+  final QuizMode mode;
+  final StageFlow flow;
+  final DifficultyStage? fixedStage;
+
+  const ResultPage({
+    super.key,
+    required this.score,
+    required this.total,
+    required this.mode,
+    required this.flow,
+    required this.fixedStage,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final rate = score / total;
+    final grade = rate >= 0.9
+        ? 'S'
+        : rate >= 0.75
+            ? 'A'
+            : rate >= 0.6
+                ? 'B'
+                : 'C';
+
+    return Scaffold(
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFF7E57C2), Color(0xFFFF5DA2)],
+          ),
+        ),
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Text('🎊 게임 완료! 🎊', style: TextStyle(fontSize: 34, fontWeight: FontWeight.w900, color: Colors.white)),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 22),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(24),
+                    boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 12)],
+                  ),
+                  child: Column(
+                    children: [
+                      Text('최종 점수 $score / $total', style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w900)),
+                      const SizedBox(height: 8),
+                      Text('등급 $grade', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFF6A1B9A))),
+                      const SizedBox(height: 8),
+                      Text('정답률 ${(rate * 100).toStringAsFixed(0)}%', style: const TextStyle(fontSize: 18, color: Colors.black87)),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+                FilledButton.icon(
+                  onPressed: () {
+                    Navigator.of(context).pushReplacement(
+                      MaterialPageRoute(
+                        builder: (_) => QuizPage(mode: mode, flow: flow, fixedStage: fixedStage),
+                      ),
+                    );
+                  },
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFFFF4FB0),
+                    foregroundColor: Colors.white,
+                    minimumSize: const Size.fromHeight(54),
+                  ),
+                  icon: const Icon(Icons.replay),
+                  label: const Text('같은 설정으로 다시 하기', style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+                const SizedBox(height: 10),
+                OutlinedButton.icon(
+                  onPressed: () {
+                    Navigator.of(context).pushAndRemoveUntil(
+                      MaterialPageRoute(builder: (_) => const StartPage()),
+                      (route) => false,
+                    );
+                  },
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.white,
+                    side: const BorderSide(color: Colors.white70),
+                    minimumSize: const Size.fromHeight(50),
+                  ),
+                  icon: const Icon(Icons.home),
+                  label: const Text('모드 선택으로 돌아가기'),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
