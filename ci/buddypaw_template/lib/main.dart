@@ -194,246 +194,194 @@ class AnimatedDog extends StatefulWidget {
   State<AnimatedDog> createState() => _AnimatedDogState();
 }
 
-class _AnimatedDogState extends State<AnimatedDog> with TickerProviderStateMixin {
-  late final AnimationController _bobController;
-  late final AnimationController _tailController;
-  late final AnimationController _walkController;
+class _IsoEntity {
+  final Offset world;
+  final double size;
+  final Color color;
+
+  const _IsoEntity(this.world, this.size, this.color);
+}
+
+class _AnimatedDogState extends State<AnimatedDog> with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  final List<Offset> _path = const [
+    Offset(1.2, 2.2),
+    Offset(4.6, 2.8),
+    Offset(6.1, 5.2),
+    Offset(3.4, 6.4),
+    Offset(1.4, 4.8),
+  ];
 
   @override
   void initState() {
     super.initState();
-    _bobController = AnimationController(vsync: this, duration: const Duration(milliseconds: 1400))
-      ..repeat(reverse: true);
-    _tailController = AnimationController(vsync: this, duration: const Duration(milliseconds: 380))
-      ..repeat(reverse: true);
-    _walkController = AnimationController(vsync: this, duration: const Duration(milliseconds: 5600))
-      ..repeat();
+    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 6400))..repeat();
   }
 
   @override
   void dispose() {
-    _bobController.dispose();
-    _tailController.dispose();
-    _walkController.dispose();
+    _ctrl.dispose();
     super.dispose();
   }
 
-  double _stageScale(GrowthStage s) {
-    switch (s) {
-      case GrowthStage.baby:
-        return 0.9;
-      case GrowthStage.junior:
-        return 1.05;
-      case GrowthStage.adult:
-        return 1.2;
-    }
-  }
+  double _stageScale(GrowthStage s) => switch (s) {
+        GrowthStage.baby => 0.88,
+        GrowthStage.junior => 1.0,
+        GrowthStage.adult => 1.14,
+      };
 
-  String _face(MoodFace m) {
-    switch (m) {
-      case MoodFace.happy:
-        return '^ᴥ^';
-      case MoodFace.normal:
-        return '•ᴥ•';
-      case MoodFace.tired:
-        return '-ᴥ-';
-      case MoodFace.sad:
-        return 'TᴥT';
-    }
-  }
+  String _face(MoodFace m) => switch (m) {
+        MoodFace.happy => '^ᴥ^',
+        MoodFace.normal => '•ᴥ•',
+        MoodFace.tired => '-ᴥ-',
+        MoodFace.sad => 'TᴥT',
+      };
 
-  Widget _leg(double dy) {
-    return Transform.translate(
-      offset: Offset(0, dy),
-      child: Container(
-        width: 10,
-        height: 24,
-        decoration: BoxDecoration(
-          color: const Color(0xFFC68642),
-          borderRadius: BorderRadius.circular(8),
-        ),
-      ),
-    );
+  Offset _lerpPath(double t) {
+    final seg = t * _path.length;
+    final i = seg.floor() % _path.length;
+    final j = (i + 1) % _path.length;
+    final local = seg - seg.floor();
+    return Offset.lerp(_path[i], _path[j], Curves.easeInOut.transform(local))!;
   }
 
   @override
   Widget build(BuildContext context) {
-    final scale = _stageScale(widget.stage);
-
     return LayoutBuilder(
-      builder: (context, constraints) {
-        final trackWidth = constraints.maxWidth;
-        const dogWidth = 190.0;
-        final maxX = math.max(0.0, trackWidth - dogWidth);
+      builder: (context, c) {
+        const tileW = 56.0;
+        const tileH = 28.0;
+        final origin = Offset(c.maxWidth / 2, 54);
+
+        Offset isoToScreen(Offset w) => Offset(
+              origin.dx + (w.dx - w.dy) * (tileW / 2),
+              origin.dy + (w.dx + w.dy) * (tileH / 2),
+            );
 
         return AnimatedBuilder(
-          animation: Listenable.merge([_bobController, _tailController, _walkController]),
-          builder: (context, child) {
-            final t = _walkController.value;
-            final forward = t < 0.5;
-            final p = forward ? (t / 0.5) : ((1 - t) / 0.5);
-            final walkX = maxX * p;
-            final step = math.sin(t * math.pi * 8);
-            final bob = math.sin(t * math.pi * 4).abs() * 2.5;
-            final tailAngle = (widget.mood == MoodFace.sad ? 0.05 : 0.22) * (1 - (_tailController.value * 2 - 1).abs());
+          animation: _ctrl,
+          builder: (_, __) {
+            final t = _ctrl.value;
+            final dogWorld = _lerpPath(t);
+            final prevWorld = _lerpPath((t - 0.01) % 1.0);
+            final facingRight = (dogWorld.dx - prevWorld.dx) >= 0;
+            final dogScreen = isoToScreen(dogWorld);
+            final step = math.sin(t * math.pi * 16);
+            final stageScale = _stageScale(widget.stage);
 
-            final depth = 1.0 - (2 * (p - 0.5)).abs();
-            final depthScale = 0.95 + (0.1 * depth);
-            final shadowWidth = 96 + (20 * depth);
+            final props = <_IsoEntity>[
+              const _IsoEntity(Offset(5.8, 1.2), 34, Color(0xFF8D6E63)),
+              const _IsoEntity(Offset(2.0, 5.8), 30, Color(0xFF6D4C41)),
+              const _IsoEntity(Offset(6.7, 4.9), 26, Color(0xFF795548)),
+            ];
+
+            final sortedProps = [...props]..sort((a, b) => a.world.dy.compareTo(b.world.dy));
 
             return Stack(
               children: [
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  top: 186,
-                  child: Container(
-                    height: 28,
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [Colors.brown.withOpacity(0.08), Colors.brown.withOpacity(0.18)],
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                      ),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
+                Positioned.fill(
+                  child: CustomPaint(
+                    painter: _IsoGroundPainter(tileW: tileW, tileH: tileH, origin: origin),
                   ),
                 ),
-                Positioned(
-                  left: walkX + (dogWidth / 2) - (shadowWidth / 2),
-                  top: 174,
-                  child: Container(
-                    width: shadowWidth,
-                    height: 14,
-                    decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.18 + (0.08 * depth)),
-                      borderRadius: BorderRadius.circular(999),
+                ...sortedProps.map((e) {
+                  final p = isoToScreen(e.world);
+                  return Positioned(
+                    left: p.dx - e.size / 2,
+                    top: p.dy - e.size,
+                    child: Container(
+                      width: e.size,
+                      height: e.size,
+                      decoration: BoxDecoration(color: e.color, borderRadius: BorderRadius.circular(8)),
                     ),
-                  ),
-                ),
+                  );
+                }),
                 Positioned(
-                  left: walkX,
-                  top: 24,
-                  child: Transform.translate(
-                    offset: Offset(0, -bob),
-                    child: Transform(
-                      alignment: Alignment.center,
-                      transform: Matrix4.identity()..scale(forward ? 1.0 : -1.0, 1.0),
-                      child: Transform.scale(
-                        scale: scale * depthScale,
-                        child: SizedBox(
-                          width: dogWidth,
-                          height: 170,
-                          child: Stack(
-                            alignment: Alignment.center,
-                            children: [
-                              Positioned(
-                                top: 132,
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    _leg(-step * 4),
-                                    const SizedBox(width: 8),
-                                    _leg(step * 4),
-                                    const SizedBox(width: 24),
-                                    _leg(step * 4),
-                                    const SizedBox(width: 8),
-                                    _leg(-step * 4),
-                                  ],
+                  left: dogScreen.dx - (58 * stageScale),
+                  top: dogScreen.dy - (94 * stageScale),
+                  child: Transform(
+                    alignment: Alignment.center,
+                    transform: Matrix4.identity()..scale(facingRight ? 1.0 : -1.0, 1.0),
+                    child: Transform.scale(
+                      scale: stageScale,
+                      child: SizedBox(
+                        width: 116,
+                        height: 112,
+                        child: Stack(
+                          children: [
+                            Positioned(
+                              left: 18,
+                              top: 86,
+                              child: Container(
+                                width: 78,
+                                height: 10,
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withOpacity(0.22),
+                                  borderRadius: BorderRadius.circular(999),
                                 ),
                               ),
-                              Positioned(
-                                right: 24,
-                                top: 92,
-                                child: Transform.rotate(
-                                  angle: tailAngle,
-                                  alignment: Alignment.topLeft,
-                                  child: Container(
-                                    width: 46,
-                                    height: 12,
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFC68642),
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                  ),
+                            ),
+                            Positioned(
+                              left: 48,
+                              top: 60,
+                              child: Transform.translate(
+                                offset: Offset(0, step * 3),
+                                child: _leg(),
+                              ),
+                            ),
+                            Positioned(
+                              left: 66,
+                              top: 60,
+                              child: Transform.translate(
+                                offset: Offset(0, -step * 3),
+                                child: _leg(),
+                              ),
+                            ),
+                            Positioned(
+                              left: 16,
+                              top: 36,
+                              child: Container(
+                                width: 74,
+                                height: 46,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFD89A5B),
+                                  borderRadius: BorderRadius.circular(30),
                                 ),
                               ),
-                              Positioned(
-                                top: 84,
+                            ),
+                            Positioned(
+                              left: 73,
+                              top: 46,
+                              child: Transform.rotate(
+                                angle: math.sin(t * math.pi * 8) * 0.28,
                                 child: Container(
-                                  width: 110,
-                                  height: 62,
+                                  width: 30,
+                                  height: 8,
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFFD89A5B),
-                                    borderRadius: BorderRadius.circular(40),
+                                    color: const Color(0xFFC68642),
+                                    borderRadius: BorderRadius.circular(8),
                                   ),
                                 ),
                               ),
-                              Positioned(
-                                top: 26,
-                                child: Stack(
-                                  alignment: Alignment.center,
-                                  children: [
-                                    Container(
-                                      width: 120,
-                                      height: 100,
-                                      decoration: const BoxDecoration(
-                                        color: Color(0xFFE7B27A),
-                                        shape: BoxShape.circle,
-                                      ),
-                                    ),
-                                    Positioned(
-                                      top: 12,
-                                      left: 18,
-                                      child: Transform.rotate(
-                                        angle: -0.45,
-                                        child: Container(
-                                          width: 24,
-                                          height: 34,
-                                          decoration: const BoxDecoration(
-                                            color: Color(0xFFC68642),
-                                            borderRadius: BorderRadius.only(
-                                              topLeft: Radius.circular(16),
-                                              topRight: Radius.circular(16),
-                                              bottomLeft: Radius.circular(16),
-                                              bottomRight: Radius.circular(4),
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                    Positioned(
-                                      top: 12,
-                                      right: 18,
-                                      child: Transform.rotate(
-                                        angle: 0.45,
-                                        child: Container(
-                                          width: 24,
-                                          height: 34,
-                                          decoration: const BoxDecoration(
-                                            color: Color(0xFFC68642),
-                                            borderRadius: BorderRadius.only(
-                                              topLeft: Radius.circular(16),
-                                              topRight: Radius.circular(16),
-                                              bottomLeft: Radius.circular(4),
-                                              bottomRight: Radius.circular(16),
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                    Positioned(
-                                      top: 38,
-                                      child: Text(
-                                        _face(widget.mood),
-                                        style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-                                      ),
-                                    ),
-                                  ],
+                            ),
+                            Positioned(
+                              left: 0,
+                              top: 2,
+                              child: Container(
+                                width: 72,
+                                height: 66,
+                                decoration: const BoxDecoration(
+                                  color: Color(0xFFE7B27A),
+                                  shape: BoxShape.circle,
                                 ),
                               ),
-                            ],
-                          ),
+                            ),
+                            Positioned(
+                              left: 16,
+                              top: 23,
+                              child: Text(_face(widget.mood), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                            ),
+                          ],
                         ),
                       ),
                     ),
@@ -446,6 +394,49 @@ class _AnimatedDogState extends State<AnimatedDog> with TickerProviderStateMixin
       },
     );
   }
+
+  Widget _leg() => Container(
+        width: 8,
+        height: 20,
+        decoration: BoxDecoration(
+          color: const Color(0xFFC68642),
+          borderRadius: BorderRadius.circular(8),
+        ),
+      );
+}
+
+class _IsoGroundPainter extends CustomPainter {
+  final double tileW;
+  final double tileH;
+  final Offset origin;
+
+  _IsoGroundPainter({required this.tileW, required this.tileH, required this.origin});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final light = Paint()..color = const Color(0xFFBCAAA4);
+    final dark = Paint()..color = const Color(0xFFA1887F);
+
+    Path diamond(Offset c) => Path()
+      ..moveTo(c.dx, c.dy - tileH / 2)
+      ..lineTo(c.dx + tileW / 2, c.dy)
+      ..lineTo(c.dx, c.dy + tileH / 2)
+      ..lineTo(c.dx - tileW / 2, c.dy)
+      ..close();
+
+    for (int y = 0; y < 8; y++) {
+      for (int x = 0; x < 8; x++) {
+        final c = Offset(
+          origin.dx + (x - y) * (tileW / 2),
+          origin.dy + (x + y) * (tileH / 2),
+        );
+        canvas.drawPath(diamond(c), (x + y).isEven ? light : dark);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _IsoGroundPainter oldDelegate) => false;
 }
 
 class _StatBar extends StatelessWidget {
