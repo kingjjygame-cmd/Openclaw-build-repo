@@ -2,7 +2,6 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 void main() {
-  // Layout-safe build (status/navigation bar overlap fix)
   runApp(const BuddyPawApp());
 }
 
@@ -15,7 +14,7 @@ class BuddyPawApp extends StatelessWidget {
       title: 'BuddyPaw',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.orange),
+        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF7A4B28)),
         useMaterial3: true,
       ),
       home: const HomeScreen(),
@@ -54,12 +53,12 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final PetState pet = PetState(
-    bond: 5,
-    hunger: 40,
-    mood: 60,
-    energy: 70,
-    care7d: 0.5,
-    care14d: 0.4,
+    bond: 12,
+    hunger: 38,
+    mood: 68,
+    energy: 74,
+    care7d: 0.58,
+    care14d: 0.45,
   );
 
   GrowthStage _getGrowthStage(PetState s) {
@@ -69,9 +68,9 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   MoodFace _getMoodFace(PetState s) {
-    if (s.mood >= 75 && s.energy >= 40 && s.hunger <= 50) return MoodFace.happy;
-    if (s.mood < 35 || s.energy < 25 || s.hunger > 80) return MoodFace.sad;
-    if (s.energy < 40 || s.hunger > 65) return MoodFace.tired;
+    if (s.mood >= 76 && s.energy >= 40 && s.hunger <= 55) return MoodFace.happy;
+    if (s.mood < 35 || s.energy < 25 || s.hunger > 82) return MoodFace.sad;
+    if (s.energy < 40 || s.hunger > 66) return MoodFace.tired;
     return MoodFace.normal;
   }
 
@@ -81,13 +80,13 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {
       switch (action) {
         case PetAction.feed:
-          pet.hunger = (pet.hunger - 25).clamp(0, 100);
-          pet.mood = (pet.mood + 5).clamp(0, 100);
+          pet.hunger = (pet.hunger - 24).clamp(0, 100);
+          pet.mood = (pet.mood + 6).clamp(0, 100);
           pet.bond = (pet.bond + 2).clamp(0, 100);
           break;
         case PetAction.walk:
           pet.energy = (pet.energy - 15).clamp(0, 100);
-          pet.mood = (pet.mood + 15).clamp(0, 100);
+          pet.mood = (pet.mood + 14).clamp(0, 100);
           pet.bond = (pet.bond + 5).clamp(0, 100);
           break;
         case PetAction.play:
@@ -96,11 +95,10 @@ class _HomeScreenState extends State<HomeScreen> {
           pet.bond = (pet.bond + 4).clamp(0, 100);
           break;
         case PetAction.rest:
-          pet.energy = (pet.energy + 20).clamp(0, 100);
+          pet.energy = (pet.energy + 19).clamp(0, 100);
           pet.mood = (pet.mood + 3).clamp(0, 100);
           break;
       }
-
       pet.care7d = (pet.care7d + 0.03).clamp(0.0, 1.0);
       pet.care14d = (pet.care14d + 0.02).clamp(0.0, 1.0);
     });
@@ -111,14 +109,9 @@ class _HomeScreenState extends State<HomeScreen> {
       messenger.hideCurrentSnackBar();
       messenger.showSnackBar(
         SnackBar(
-          content: Text('우리 버디가 성장했어요! (${afterStage.name}) 🐾'),
+          content: Text('우리 버디가 성장했어요! (${afterStage.name})'),
           behavior: SnackBarBehavior.floating,
-          margin: EdgeInsets.fromLTRB(
-            12,
-            0,
-            12,
-            20 + MediaQuery.of(context).padding.bottom,
-          ),
+          margin: EdgeInsets.fromLTRB(12, 0, 12, 20 + MediaQuery.of(context).padding.bottom),
         ),
       );
     }
@@ -136,50 +129,61 @@ class _HomeScreenState extends State<HomeScreen> {
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
           child: Column(
             children: [
-            Expanded(
-              child: Container(
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: Colors.orange.shade50,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    SizedBox(
-                      width: double.infinity,
-                      height: 220,
-                      child: AnimatedDog(stage: stage, mood: mood),
+              Expanded(
+                child: Container(
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(20),
+                    gradient: const LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [Color(0xFFF9F2E8), Color(0xFFECDCC7)],
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Stage: ${stage.name} | Mood: ${mood.name}',
-                      style: const TextStyle(fontWeight: FontWeight.w600),
-                    ),
-                  ],
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.08),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      SizedBox(
+                        width: double.infinity,
+                        height: 230,
+                        child: AnimatedDog(stage: stage, mood: mood),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        '성장 단계: ${stage.name}   ·   현재 기분: ${mood.name}',
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 12),
-            _StatBar(label: '배고픔', value: pet.hunger, color: Colors.redAccent),
-            _StatBar(label: '기분', value: pet.mood, color: Colors.pinkAccent),
-            _StatBar(label: '에너지', value: pet.energy, color: Colors.blueAccent),
-            _StatBar(label: '유대감', value: pet.bond, color: Colors.green),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                FilledButton(onPressed: () => _applyAction(PetAction.feed), child: const Text('밥주기')),
-                FilledButton(onPressed: () => _applyAction(PetAction.walk), child: const Text('산책')),
-                FilledButton(onPressed: () => _applyAction(PetAction.play), child: const Text('놀아주기')),
-                FilledButton(onPressed: () => _applyAction(PetAction.rest), child: const Text('쉬기')),
-              ],
-            ),
-          ],
+              const SizedBox(height: 12),
+              _StatBar(label: '배고픔', value: pet.hunger, color: Colors.redAccent),
+              _StatBar(label: '기분', value: pet.mood, color: Colors.pinkAccent),
+              _StatBar(label: '에너지', value: pet.energy, color: Colors.blueAccent),
+              _StatBar(label: '유대감', value: pet.bond, color: Colors.green),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  FilledButton(onPressed: () => _applyAction(PetAction.feed), child: const Text('밥주기')),
+                  FilledButton(onPressed: () => _applyAction(PetAction.walk), child: const Text('산책')),
+                  FilledButton(onPressed: () => _applyAction(PetAction.play), child: const Text('놀아주기')),
+                  FilledButton(onPressed: () => _applyAction(PetAction.rest), child: const Text('쉬기')),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
-    ),
     );
   }
 }
@@ -194,28 +198,20 @@ class AnimatedDog extends StatefulWidget {
   State<AnimatedDog> createState() => _AnimatedDogState();
 }
 
-class _IsoEntity {
-  final Offset world;
-  final double size;
-  final Color color;
-
-  const _IsoEntity(this.world, this.size, this.color);
-}
-
 class _AnimatedDogState extends State<AnimatedDog> with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl;
   final List<Offset> _path = const [
-    Offset(1.2, 2.2),
-    Offset(4.6, 2.8),
-    Offset(6.1, 5.2),
-    Offset(3.4, 6.4),
-    Offset(1.4, 4.8),
+    Offset(1.2, 2.4),
+    Offset(4.7, 2.1),
+    Offset(6.2, 4.9),
+    Offset(3.7, 6.7),
+    Offset(1.1, 5.0),
   ];
 
   @override
   void initState() {
     super.initState();
-    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 6400))..repeat();
+    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 6200))..repeat();
   }
 
   @override
@@ -227,49 +223,52 @@ class _AnimatedDogState extends State<AnimatedDog> with SingleTickerProviderStat
   double _stageScale(GrowthStage s) => switch (s) {
         GrowthStage.baby => 0.88,
         GrowthStage.junior => 1.0,
-        GrowthStage.adult => 1.14,
+        GrowthStage.adult => 1.15,
       };
 
-
-  Offset _lerpPath(double t) {
+  Offset _pointAt(double t) {
     final seg = t * _path.length;
     final i = seg.floor() % _path.length;
     final j = (i + 1) % _path.length;
-    final local = seg - seg.floor();
-    return Offset.lerp(_path[i], _path[j], Curves.easeInOut.transform(local))!;
+    final localT = Curves.easeInOut.transform(seg - seg.floor());
+    return Offset.lerp(_path[i], _path[j], localT)!;
   }
 
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
-      builder: (context, c) {
-        const tileW = 56.0;
-        const tileH = 28.0;
-        final origin = Offset(c.maxWidth / 2, 54);
+      builder: (_, constraints) {
+        const tileW = 58.0;
+        const tileH = 29.0;
+        final origin = Offset(constraints.maxWidth / 2, 48);
 
-        Offset isoToScreen(Offset w) => Offset(
-              origin.dx + (w.dx - w.dy) * (tileW / 2),
-              origin.dy + (w.dx + w.dy) * (tileH / 2),
-            );
+        Offset isoToScreen(Offset w) {
+          return Offset(
+            origin.dx + (w.dx - w.dy) * (tileW / 2),
+            origin.dy + (w.dx + w.dy) * (tileH / 2),
+          );
+        }
 
         return AnimatedBuilder(
           animation: _ctrl,
           builder: (_, __) {
             final t = _ctrl.value;
-            final dogWorld = _lerpPath(t);
-            final prevWorld = _lerpPath((t - 0.01) % 1.0);
-            final facingRight = (dogWorld.dx - prevWorld.dx) >= 0;
-            final dogScreen = isoToScreen(dogWorld);
-            final step = math.sin(t * math.pi * 16);
+            final now = _pointAt(t);
+            final prev = _pointAt((t - 0.01) % 1.0);
+            final dir = now - prev;
+            final facingRight = dir.dx >= 0;
+            final heading = math.atan2(dir.dy, dir.dx);
+
+            final dogScreen = isoToScreen(now);
             final stageScale = _stageScale(widget.stage);
+            final gait = math.sin(t * math.pi * 14);
+            final breath = math.sin(t * math.pi * 2) * 1.2;
 
-            final props = <_IsoEntity>[
-              const _IsoEntity(Offset(5.8, 1.2), 34, Color(0xFF8D6E63)),
-              const _IsoEntity(Offset(2.0, 5.8), 30, Color(0xFF6D4C41)),
-              const _IsoEntity(Offset(6.7, 4.9), 26, Color(0xFF795548)),
-            ];
-
-            final sortedProps = [...props]..sort((a, b) => a.world.dy.compareTo(b.world.dy));
+            final props = [
+              _IsoProp(world: const Offset(5.9, 1.2), type: _PropType.tree),
+              _IsoProp(world: const Offset(2.0, 5.8), type: _PropType.stone),
+              _IsoProp(world: const Offset(6.6, 5.6), type: _PropType.tree),
+            ]..sort((a, b) => a.world.dy.compareTo(b.world.dy));
 
             return Stack(
               children: [
@@ -278,34 +277,34 @@ class _AnimatedDogState extends State<AnimatedDog> with SingleTickerProviderStat
                     painter: _IsoGroundPainter(tileW: tileW, tileH: tileH, origin: origin),
                   ),
                 ),
-                ...sortedProps.map((e) {
-                  final p = isoToScreen(e.world);
+                ...props.map((p) {
+                  final s = isoToScreen(p.world);
                   return Positioned(
-                    left: p.dx - e.size / 2,
-                    top: p.dy - e.size,
-                    child: Container(
-                      width: e.size,
-                      height: e.size,
-                      decoration: BoxDecoration(color: e.color, borderRadius: BorderRadius.circular(8)),
+                    left: s.dx - 18,
+                    top: s.dy - 38,
+                    child: CustomPaint(
+                      size: const Size(36, 40),
+                      painter: _PropPainter(type: p.type),
                     ),
                   );
                 }),
                 Positioned(
-                  left: dogScreen.dx - (58 * stageScale),
-                  top: dogScreen.dy - (94 * stageScale),
+                  left: dogScreen.dx - 72 * stageScale,
+                  top: dogScreen.dy - 105 * stageScale,
                   child: Transform(
                     alignment: Alignment.center,
                     transform: Matrix4.identity()..scale(facingRight ? 1.0 : -1.0, 1.0),
                     child: Transform.scale(
                       scale: stageScale,
-                      child: SizedBox(
-                        width: 132,
-                        height: 118,
+                      child: Transform.translate(
+                        offset: Offset(0, breath),
                         child: CustomPaint(
-                          painter: _DogSpritePainter(
+                          size: const Size(146, 122),
+                          painter: _DogPainter(
                             mood: widget.mood,
-                            step: step,
-                            tailSwing: math.sin(t * math.pi * 8) * 0.28,
+                            gait: gait,
+                            heading: heading,
+                            tail: math.sin(t * math.pi * 8) * 0.24,
                           ),
                         ),
                       ),
@@ -319,112 +318,196 @@ class _AnimatedDogState extends State<AnimatedDog> with SingleTickerProviderStat
       },
     );
   }
-
 }
 
-class _DogSpritePainter extends CustomPainter {
-  final MoodFace mood;
-  final double step;
-  final double tailSwing;
+class _IsoProp {
+  final Offset world;
+  final _PropType type;
 
-  _DogSpritePainter({required this.mood, required this.step, required this.tailSwing});
+  _IsoProp({required this.world, required this.type});
+}
+
+enum _PropType { tree, stone }
+
+class _PropPainter extends CustomPainter {
+  final _PropType type;
+
+  _PropPainter({required this.type});
 
   @override
   void paint(Canvas canvas, Size size) {
-    final body = Paint()..color = const Color(0xFFB97A45);
-    final fur = Paint()..color = const Color(0xFFD9A066);
-    final dark = Paint()..color = const Color(0xFF3E2723);
-    final nose = Paint()..color = const Color(0xFF1F1A17);
+    if (type == _PropType.tree) {
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(const Rect.fromLTWH(14, 20, 8, 18), const Radius.circular(3)),
+        Paint()..color = const Color(0xFF6D4C41),
+      );
+      canvas.drawCircle(const Offset(18, 12), 12, Paint()..color = const Color(0xFF4E7E43));
+      canvas.drawCircle(const Offset(11, 15), 7, Paint()..color = const Color(0xFF5D8E4E));
+      canvas.drawCircle(const Offset(25, 15), 7, Paint()..color = const Color(0xFF5D8E4E));
+    } else {
+      final rock = Path()
+        ..moveTo(6, 30)
+        ..lineTo(13, 19)
+        ..lineTo(26, 18)
+        ..lineTo(31, 28)
+        ..lineTo(22, 35)
+        ..lineTo(10, 35)
+        ..close();
+      canvas.drawPath(rock, Paint()..color = const Color(0xFF8D8D8D));
+      canvas.drawPath(
+        rock,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.2
+          ..color = const Color(0xFF6E6E6E),
+      );
+    }
+  }
 
-    final shadowRect = RRect.fromRectAndRadius(
-      Rect.fromLTWH(28, 96, 74, 10),
-      const Radius.circular(99),
-    );
-    canvas.drawRRect(shadowRect, Paint()..color = Colors.black.withOpacity(0.22));
+  @override
+  bool shouldRepaint(covariant _PropPainter oldDelegate) => oldDelegate.type != type;
+}
 
-    void leg(double x, double lift) {
-      final rect = RRect.fromRectAndRadius(Rect.fromLTWH(x, 76 + lift, 10, 24), const Radius.circular(6));
-      canvas.drawRRect(rect, body);
-      canvas.drawCircle(Offset(x + 5, 100 + lift), 4, dark);
+class _DogPainter extends CustomPainter {
+  final MoodFace mood;
+  final double gait;
+  final double heading;
+  final double tail;
+
+  _DogPainter({required this.mood, required this.gait, required this.heading, required this.tail});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final body = Paint()..color = const Color(0xFFAD6C3B);
+    final light = Paint()..color = const Color(0xFFD39A62);
+    final dark = Paint()..color = const Color(0xFF3A2618);
+
+    final shadow = RRect.fromRectAndRadius(const Rect.fromLTWH(30, 104, 84, 10), const Radius.circular(99));
+    canvas.drawRRect(shadow, Paint()..color = Colors.black.withOpacity(0.24));
+
+    void leg(double x, double phase, bool front) {
+      final lift = math.sin(phase) * 3.4;
+      final y = front ? 72.0 : 76.0;
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(Rect.fromLTWH(x, y + lift, 11, 28), const Radius.circular(7)),
+        body,
+      );
+      canvas.drawCircle(Offset(x + 5.5, 103 + lift), 4.2, dark);
     }
 
-    leg(50, step * 2.4);
-    leg(66, -step * 2.4);
-    leg(82, -step * 2.4);
-    leg(96, step * 2.4);
+    leg(58, gait, true);
+    leg(74, gait + math.pi, true);
+    leg(90, gait + math.pi, false);
+    leg(105, gait, false);
 
-    final torso = RRect.fromRectAndRadius(Rect.fromLTWH(40, 42, 70, 40), const Radius.circular(20));
+    final torso = RRect.fromRectAndRadius(const Rect.fromLTWH(44, 46, 76, 43), const Radius.circular(22));
     canvas.drawRRect(torso, body);
-    canvas.drawOval(const Rect.fromLTWH(48, 52, 42, 24), fur);
+    canvas.drawOval(const Rect.fromLTWH(52, 58, 44, 24), light);
+
+    final shoulder = Path()
+      ..moveTo(73, 47)
+      ..quadraticBezierTo(88, 37, 105, 41)
+      ..lineTo(106, 58)
+      ..lineTo(78, 58)
+      ..close();
+    canvas.drawPath(shoulder, Paint()..color = const Color(0xFF9B5F34));
 
     canvas.save();
-    canvas.translate(108, 60);
-    canvas.rotate(tailSwing);
-    final tail = RRect.fromRectAndRadius(const Rect.fromLTWH(0, -4, 28, 8), const Radius.circular(8));
-    canvas.drawRRect(tail, body);
+    canvas.translate(118, 66);
+    canvas.rotate(tail);
+    final tailPath = Path()
+      ..moveTo(0, 0)
+      ..quadraticBezierTo(18, -6, 28, -2)
+      ..quadraticBezierTo(22, 6, 0, 6)
+      ..close();
+    canvas.drawPath(tailPath, body);
     canvas.restore();
 
     final head = Path()
-      ..moveTo(22, 30)
-      ..quadraticBezierTo(26, 12, 48, 12)
-      ..quadraticBezierTo(66, 12, 72, 28)
-      ..quadraticBezierTo(74, 50, 56, 58)
-      ..quadraticBezierTo(38, 62, 24, 52)
+      ..moveTo(20, 42)
+      ..quadraticBezierTo(20, 18, 44, 14)
+      ..quadraticBezierTo(70, 14, 75, 38)
+      ..quadraticBezierTo(76, 61, 52, 66)
+      ..quadraticBezierTo(28, 68, 20, 52)
       ..close();
-    canvas.drawPath(head, fur);
+    canvas.drawPath(head, light);
 
-    final earBack = Path()
-      ..moveTo(34, 22)
-      ..lineTo(28, 2)
-      ..lineTo(44, 16)
+    final ear1 = Path()
+      ..moveTo(34, 24)
+      ..lineTo(30, 2)
+      ..lineTo(46, 18)
       ..close();
-    final earFront = Path()
-      ..moveTo(58, 22)
-      ..lineTo(54, 4)
-      ..lineTo(68, 20)
+    final ear2 = Path()
+      ..moveTo(60, 25)
+      ..lineTo(56, 5)
+      ..lineTo(70, 21)
       ..close();
-    canvas.drawPath(earBack, body);
-    canvas.drawPath(earFront, body);
+    canvas.drawPath(ear1, body);
+    canvas.drawPath(ear2, body);
 
-    canvas.drawCircle(const Offset(44, 34), 3.2, dark);
-    canvas.drawCircle(const Offset(58, 34), 3.2, dark);
-    canvas.drawCircle(const Offset(52, 42), 3.6, nose);
+    final muzzle = RRect.fromRectAndRadius(const Rect.fromLTWH(40, 40, 22, 16), const Radius.circular(8));
+    canvas.drawRRect(muzzle, Paint()..color = const Color(0xFFE9B98A));
+
+    canvas.drawCircle(const Offset(44, 34), 3.4, dark);
+    canvas.drawCircle(const Offset(58, 34), 3.4, dark);
+    canvas.drawCircle(const Offset(51, 44), 3.5, Paint()..color = const Color(0xFF1E1712));
 
     final mouth = Path();
-    if (mood == MoodFace.happy) {
-      mouth
-        ..moveTo(46, 47)
-        ..quadraticBezierTo(52, 53, 58, 47);
-    } else if (mood == MoodFace.sad) {
-      mouth
-        ..moveTo(46, 51)
-        ..quadraticBezierTo(52, 46, 58, 51);
-    } else if (mood == MoodFace.tired) {
-      mouth
-        ..moveTo(46, 49)
-        ..lineTo(58, 49);
-    } else {
-      mouth
-        ..moveTo(46, 48)
-        ..quadraticBezierTo(52, 50, 58, 48);
+    switch (mood) {
+      case MoodFace.happy:
+        mouth
+          ..moveTo(44, 50)
+          ..quadraticBezierTo(51, 56, 59, 50);
+        break;
+      case MoodFace.sad:
+        mouth
+          ..moveTo(44, 54)
+          ..quadraticBezierTo(51, 49, 59, 54);
+        break;
+      case MoodFace.tired:
+        mouth
+          ..moveTo(44, 52)
+          ..lineTo(59, 52);
+        break;
+      case MoodFace.normal:
+        mouth
+          ..moveTo(44, 51)
+          ..quadraticBezierTo(51, 53, 59, 51);
+        break;
     }
     canvas.drawPath(
       mouth,
       Paint()
-        ..color = dark.color
         ..style = PaintingStyle.stroke
         ..strokeWidth = 2
-        ..strokeCap = StrokeCap.round,
+        ..strokeCap = StrokeCap.round
+        ..color = dark.color,
     );
 
-    final collar = RRect.fromRectAndRadius(Rect.fromLTWH(38, 58, 38, 7), const Radius.circular(4));
+    final highlight = Paint()
+      ..shader = const LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [Color(0x55FFFFFF), Color(0x00FFFFFF)],
+      ).createShader(const Rect.fromLTWH(24, 18, 96, 72));
+    canvas.drawOval(const Rect.fromLTWH(34, 32, 74, 34), highlight);
+
+    final collar = RRect.fromRectAndRadius(const Rect.fromLTWH(40, 63, 38, 8), const Radius.circular(4));
     canvas.drawRRect(collar, Paint()..color = const Color(0xFF2E7D32));
-    canvas.drawCircle(const Offset(74, 62), 3, Paint()..color = const Color(0xFFFFD54F));
+    canvas.drawCircle(const Offset(79, 67), 3.2, Paint()..color = const Color(0xFFFFD54F));
+
+    final turnShade = (math.sin(heading) * 0.5 + 0.5) * 0.08;
+    if (turnShade > 0.01) {
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(const Rect.fromLTWH(44, 46, 76, 43), const Radius.circular(22)),
+        Paint()..color = Colors.black.withOpacity(turnShade),
+      );
+    }
   }
 
   @override
-  bool shouldRepaint(covariant _DogSpritePainter oldDelegate) {
-    return oldDelegate.step != step || oldDelegate.tailSwing != tailSwing || oldDelegate.mood != mood;
+  bool shouldRepaint(covariant _DogPainter oldDelegate) {
+    return oldDelegate.gait != gait || oldDelegate.tail != tail || oldDelegate.heading != heading || oldDelegate.mood != mood;
   }
 }
 
@@ -437,8 +520,12 @@ class _IsoGroundPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final light = Paint()..color = const Color(0xFFBCAAA4);
-    final dark = Paint()..color = const Color(0xFFA1887F);
+    final tileA = Paint()..color = const Color(0xFFD2C2A9);
+    final tileB = Paint()..color = const Color(0xFFC5B396);
+    final stroke = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 0.7
+      ..color = const Color(0x556E5B47);
 
     Path diamond(Offset c) => Path()
       ..moveTo(c.dx, c.dy - tileH / 2)
@@ -453,7 +540,9 @@ class _IsoGroundPainter extends CustomPainter {
           origin.dx + (x - y) * (tileW / 2),
           origin.dy + (x + y) * (tileH / 2),
         );
-        canvas.drawPath(diamond(c), (x + y).isEven ? light : dark);
+        final p = diamond(c);
+        canvas.drawPath(p, (x + y).isEven ? tileA : tileB);
+        canvas.drawPath(p, stroke);
       }
     }
   }
