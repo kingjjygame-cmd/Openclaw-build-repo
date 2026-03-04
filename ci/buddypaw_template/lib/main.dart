@@ -230,12 +230,6 @@ class _AnimatedDogState extends State<AnimatedDog> with SingleTickerProviderStat
         GrowthStage.adult => 1.14,
       };
 
-  String _face(MoodFace m) => switch (m) {
-        MoodFace.happy => '^ᴥ^',
-        MoodFace.normal => '•ᴥ•',
-        MoodFace.tired => '-ᴥ-',
-        MoodFace.sad => 'TᴥT',
-      };
 
   Offset _lerpPath(double t) {
     final seg = t * _path.length;
@@ -305,83 +299,14 @@ class _AnimatedDogState extends State<AnimatedDog> with SingleTickerProviderStat
                     child: Transform.scale(
                       scale: stageScale,
                       child: SizedBox(
-                        width: 116,
-                        height: 112,
-                        child: Stack(
-                          children: [
-                            Positioned(
-                              left: 18,
-                              top: 86,
-                              child: Container(
-                                width: 78,
-                                height: 10,
-                                decoration: BoxDecoration(
-                                  color: Colors.black.withOpacity(0.22),
-                                  borderRadius: BorderRadius.circular(999),
-                                ),
-                              ),
-                            ),
-                            Positioned(
-                              left: 48,
-                              top: 60,
-                              child: Transform.translate(
-                                offset: Offset(0, step * 3),
-                                child: _leg(),
-                              ),
-                            ),
-                            Positioned(
-                              left: 66,
-                              top: 60,
-                              child: Transform.translate(
-                                offset: Offset(0, -step * 3),
-                                child: _leg(),
-                              ),
-                            ),
-                            Positioned(
-                              left: 16,
-                              top: 36,
-                              child: Container(
-                                width: 74,
-                                height: 46,
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFD89A5B),
-                                  borderRadius: BorderRadius.circular(30),
-                                ),
-                              ),
-                            ),
-                            Positioned(
-                              left: 73,
-                              top: 46,
-                              child: Transform.rotate(
-                                angle: math.sin(t * math.pi * 8) * 0.28,
-                                child: Container(
-                                  width: 30,
-                                  height: 8,
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFC68642),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                ),
-                              ),
-                            ),
-                            Positioned(
-                              left: 0,
-                              top: 2,
-                              child: Container(
-                                width: 72,
-                                height: 66,
-                                decoration: const BoxDecoration(
-                                  color: Color(0xFFE7B27A),
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                            ),
-                            Positioned(
-                              left: 16,
-                              top: 23,
-                              child: Text(_face(widget.mood), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                            ),
-                          ],
+                        width: 132,
+                        height: 118,
+                        child: CustomPaint(
+                          painter: _DogSpritePainter(
+                            mood: widget.mood,
+                            step: step,
+                            tailSwing: math.sin(t * math.pi * 8) * 0.28,
+                          ),
                         ),
                       ),
                     ),
@@ -395,14 +320,112 @@ class _AnimatedDogState extends State<AnimatedDog> with SingleTickerProviderStat
     );
   }
 
-  Widget _leg() => Container(
-        width: 8,
-        height: 20,
-        decoration: BoxDecoration(
-          color: const Color(0xFFC68642),
-          borderRadius: BorderRadius.circular(8),
-        ),
-      );
+}
+
+class _DogSpritePainter extends CustomPainter {
+  final MoodFace mood;
+  final double step;
+  final double tailSwing;
+
+  _DogSpritePainter({required this.mood, required this.step, required this.tailSwing});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final body = Paint()..color = const Color(0xFFB97A45);
+    final fur = Paint()..color = const Color(0xFFD9A066);
+    final dark = Paint()..color = const Color(0xFF3E2723);
+    final nose = Paint()..color = const Color(0xFF1F1A17);
+
+    final shadowRect = RRect.fromRectAndRadius(
+      Rect.fromLTWH(28, 96, 74, 10),
+      const Radius.circular(99),
+    );
+    canvas.drawRRect(shadowRect, Paint()..color = Colors.black.withOpacity(0.22));
+
+    void leg(double x, double lift) {
+      final rect = RRect.fromRectAndRadius(Rect.fromLTWH(x, 76 + lift, 10, 24), const Radius.circular(6));
+      canvas.drawRRect(rect, body);
+      canvas.drawCircle(Offset(x + 5, 100 + lift), 4, dark);
+    }
+
+    leg(50, step * 2.4);
+    leg(66, -step * 2.4);
+    leg(82, -step * 2.4);
+    leg(96, step * 2.4);
+
+    final torso = RRect.fromRectAndRadius(Rect.fromLTWH(40, 42, 70, 40), const Radius.circular(20));
+    canvas.drawRRect(torso, body);
+    canvas.drawOval(const Rect.fromLTWH(48, 52, 42, 24), fur);
+
+    canvas.save();
+    canvas.translate(108, 60);
+    canvas.rotate(tailSwing);
+    final tail = RRect.fromRectAndRadius(const Rect.fromLTWH(0, -4, 28, 8), const Radius.circular(8));
+    canvas.drawRRect(tail, body);
+    canvas.restore();
+
+    final head = Path()
+      ..moveTo(22, 30)
+      ..quadraticBezierTo(26, 12, 48, 12)
+      ..quadraticBezierTo(66, 12, 72, 28)
+      ..quadraticBezierTo(74, 50, 56, 58)
+      ..quadraticBezierTo(38, 62, 24, 52)
+      ..close();
+    canvas.drawPath(head, fur);
+
+    final earBack = Path()
+      ..moveTo(34, 22)
+      ..lineTo(28, 2)
+      ..lineTo(44, 16)
+      ..close();
+    final earFront = Path()
+      ..moveTo(58, 22)
+      ..lineTo(54, 4)
+      ..lineTo(68, 20)
+      ..close();
+    canvas.drawPath(earBack, body);
+    canvas.drawPath(earFront, body);
+
+    canvas.drawCircle(const Offset(44, 34), 3.2, dark);
+    canvas.drawCircle(const Offset(58, 34), 3.2, dark);
+    canvas.drawCircle(const Offset(52, 42), 3.6, nose);
+
+    final mouth = Path();
+    if (mood == MoodFace.happy) {
+      mouth
+        ..moveTo(46, 47)
+        ..quadraticBezierTo(52, 53, 58, 47);
+    } else if (mood == MoodFace.sad) {
+      mouth
+        ..moveTo(46, 51)
+        ..quadraticBezierTo(52, 46, 58, 51);
+    } else if (mood == MoodFace.tired) {
+      mouth
+        ..moveTo(46, 49)
+        ..lineTo(58, 49);
+    } else {
+      mouth
+        ..moveTo(46, 48)
+        ..quadraticBezierTo(52, 50, 58, 48);
+    }
+    canvas.drawPath(
+      mouth,
+      Paint()
+        ..color = dark.color
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2
+        ..strokeCap = StrokeCap.round,
+    );
+
+    final collar = RRect.fromRectAndRadius(Rect.fromLTWH(38, 58, 38, 7), const Radius.circular(4));
+    canvas.drawRRect(collar, Paint()..color = const Color(0xFF2E7D32));
+    canvas.drawCircle(const Offset(74, 62), 3, Paint()..color = const Color(0xFFFFD54F));
+  }
+
+  @override
+  bool shouldRepaint(covariant _DogSpritePainter oldDelegate) {
+    return oldDelegate.step != step || oldDelegate.tailSwing != tailSwing || oldDelegate.mood != mood;
+  }
 }
 
 class _IsoGroundPainter extends CustomPainter {
