@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 void main() {
+  // Layout-safe build (status/navigation bar overlap fix)
   runApp(const BuddyPawApp());
 }
 
