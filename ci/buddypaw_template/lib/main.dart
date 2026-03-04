@@ -242,6 +242,20 @@ class _AnimatedDogState extends State<AnimatedDog> with TickerProviderStateMixin
     }
   }
 
+  Widget _leg(double dy) {
+    return Transform.translate(
+      offset: Offset(0, dy),
+      child: Container(
+        width: 10,
+        height: 24,
+        decoration: BoxDecoration(
+          color: const Color(0xFFC68642),
+          borderRadius: BorderRadius.circular(8),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final scale = _stageScale(widget.stage);
@@ -256,38 +270,50 @@ class _AnimatedDogState extends State<AnimatedDog> with TickerProviderStateMixin
           animation: Listenable.merge([_bobController, _tailController, _walkController]),
           builder: (context, child) {
             final t = _walkController.value;
-            final bob = math.sin(_bobController.value * math.pi) * 6;
-            final tailAngle = (widget.mood == MoodFace.sad ? 0.05 : 0.22) * (1 - (_tailController.value * 2 - 1).abs());
-
-            // 0.0~0.5: left->right, 0.5~1.0: right->left (ping-pong)
             final forward = t < 0.5;
             final p = forward ? (t / 0.5) : ((1 - t) / 0.5);
             final walkX = maxX * p;
+            final step = math.sin(t * math.pi * 8);
+            final bob = math.sin(t * math.pi * 4).abs() * 2.5;
+            final tailAngle = (widget.mood == MoodFace.sad ? 0.05 : 0.22) * (1 - (_tailController.value * 2 - 1).abs());
 
-            // pseudo-3D depth: center comes closer (bigger), sides farther (smaller)
-            final depth = 1.0 - (2 * (p - 0.5)).abs(); // center=1, edges=0
-            final depthScale = 0.88 + (0.22 * depth);
-            final yDepthOffset = (1 - depth) * 26;
-            final shadowWidth = 84 + (34 * depth);
-            final shadowOpacity = 0.14 + (0.16 * depth);
+            final depth = 1.0 - (2 * (p - 0.5)).abs();
+            final depthScale = 0.95 + (0.1 * depth);
+            final shadowWidth = 96 + (20 * depth);
 
             return Stack(
               children: [
                 Positioned(
+                  left: 0,
+                  right: 0,
+                  top: 186,
+                  child: Container(
+                    height: 28,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [Colors.brown.withOpacity(0.08), Colors.brown.withOpacity(0.18)],
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                      ),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                ),
+                Positioned(
                   left: walkX + (dogWidth / 2) - (shadowWidth / 2),
-                  top: 178 + yDepthOffset,
+                  top: 174,
                   child: Container(
                     width: shadowWidth,
-                    height: 18,
+                    height: 14,
                     decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(shadowOpacity),
+                      color: Colors.black.withOpacity(0.18 + (0.08 * depth)),
                       borderRadius: BorderRadius.circular(999),
                     ),
                   ),
                 ),
                 Positioned(
                   left: walkX,
-                  top: 20 + yDepthOffset,
+                  top: 24,
                   child: Transform.translate(
                     offset: Offset(0, -bob),
                     child: Transform(
@@ -301,6 +327,21 @@ class _AnimatedDogState extends State<AnimatedDog> with TickerProviderStateMixin
                           child: Stack(
                             alignment: Alignment.center,
                             children: [
+                              Positioned(
+                                top: 132,
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    _leg(-step * 4),
+                                    const SizedBox(width: 8),
+                                    _leg(step * 4),
+                                    const SizedBox(width: 24),
+                                    _leg(step * 4),
+                                    const SizedBox(width: 8),
+                                    _leg(-step * 4),
+                                  ],
+                                ),
+                              ),
                               Positioned(
                                 right: 24,
                                 top: 92,
