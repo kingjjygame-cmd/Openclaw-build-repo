@@ -291,21 +291,18 @@ class _AnimatedDogState extends State<AnimatedDog> with SingleTickerProviderStat
                 Positioned(
                   left: dogScreen.dx - 72 * stageScale,
                   top: dogScreen.dy - 105 * stageScale,
-                  child: Transform(
-                    alignment: Alignment.center,
-                    transform: Matrix4.identity()..scale(facingRight ? 1.0 : -1.0, 1.0),
-                    child: Transform.scale(
-                      scale: stageScale,
-                      child: Transform.translate(
-                        offset: Offset(0, breath),
-                        child: CustomPaint(
-                          size: const Size(146, 122),
-                          painter: _DogPainter(
-                            mood: widget.mood,
-                            gait: gait,
-                            heading: heading,
-                            tail: math.sin(t * math.pi * 8) * 0.24,
-                          ),
+                  child: Transform.scale(
+                    scale: stageScale,
+                    child: Transform.translate(
+                      offset: Offset(0, breath),
+                      child: CustomPaint(
+                        size: const Size(146, 122),
+                        painter: _DogPainter(
+                          mood: widget.mood,
+                          gait: gait,
+                          heading: heading,
+                          facingRight: facingRight,
+                          tail: math.sin(t * math.pi * 8) * 0.24,
                         ),
                       ),
                     ),
@@ -372,9 +369,16 @@ class _DogPainter extends CustomPainter {
   final MoodFace mood;
   final double gait;
   final double heading;
+  final bool facingRight;
   final double tail;
 
-  _DogPainter({required this.mood, required this.gait, required this.heading, required this.tail});
+  _DogPainter({
+    required this.mood,
+    required this.gait,
+    required this.heading,
+    required this.facingRight,
+    required this.tail,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -382,11 +386,23 @@ class _DogPainter extends CustomPainter {
     final light = Paint()..color = const Color(0xFFD39A62);
     final dark = Paint()..color = const Color(0xFF3A2618);
 
-    final shadow = RRect.fromRectAndRadius(const Rect.fromLTWH(30, 104, 84, 10), const Radius.circular(99));
+    final dirKey = (((heading + math.pi) / (math.pi / 4)).round() % 8);
+    final frontView = dirKey == 1 || dirKey == 2 || dirKey == 3;
+    final backView = dirKey == 5 || dirKey == 6 || dirKey == 7;
+
+    canvas.save();
+    if (!facingRight) {
+      canvas.translate(size.width, 0);
+      canvas.scale(-1, 1);
+    }
+
+    final shadowW = frontView || backView ? 66.0 : 84.0;
+    final shadow = RRect.fromRectAndRadius(Rect.fromLTWH(72 - shadowW / 2, 104, shadowW, 10), const Radius.circular(99));
     canvas.drawRRect(shadow, Paint()..color = Colors.black.withOpacity(0.24));
 
     void leg(double x, double phase, bool front) {
-      final lift = math.sin(phase) * 3.4;
+      final amp = frontView || backView ? 2.4 : 3.6;
+      final lift = math.sin(phase) * amp;
       final y = front ? 72.0 : 76.0;
       canvas.drawRRect(
         RRect.fromRectAndRadius(Rect.fromLTWH(x, y + lift, 11, 28), const Radius.circular(7)),
@@ -400,21 +416,15 @@ class _DogPainter extends CustomPainter {
     leg(90, gait + math.pi, false);
     leg(105, gait, false);
 
-    final torso = RRect.fromRectAndRadius(const Rect.fromLTWH(44, 46, 76, 43), const Radius.circular(22));
+    final torsoW = frontView || backView ? 62.0 : 76.0;
+    final torsoX = frontView || backView ? 51.0 : 44.0;
+    final torso = RRect.fromRectAndRadius(Rect.fromLTWH(torsoX, 46, torsoW, 43), const Radius.circular(22));
     canvas.drawRRect(torso, body);
-    canvas.drawOval(const Rect.fromLTWH(52, 58, 44, 24), light);
-
-    final shoulder = Path()
-      ..moveTo(73, 47)
-      ..quadraticBezierTo(88, 37, 105, 41)
-      ..lineTo(106, 58)
-      ..lineTo(78, 58)
-      ..close();
-    canvas.drawPath(shoulder, Paint()..color = const Color(0xFF9B5F34));
+    canvas.drawOval(Rect.fromLTWH(torsoX + 8, 58, torsoW - 20, 24), light);
 
     canvas.save();
-    canvas.translate(118, 66);
-    canvas.rotate(tail);
+    canvas.translate(frontView ? 98 : 118, 66);
+    canvas.rotate(tail * (backView ? 0.7 : 1.0));
     final tailPath = Path()
       ..moveTo(0, 0)
       ..quadraticBezierTo(18, -6, 28, -2)
@@ -423,91 +433,98 @@ class _DogPainter extends CustomPainter {
     canvas.drawPath(tailPath, body);
     canvas.restore();
 
-    final head = Path()
-      ..moveTo(20, 42)
-      ..quadraticBezierTo(20, 18, 44, 14)
-      ..quadraticBezierTo(70, 14, 75, 38)
-      ..quadraticBezierTo(76, 61, 52, 66)
-      ..quadraticBezierTo(28, 68, 20, 52)
-      ..close();
-    canvas.drawPath(head, light);
+    if (frontView) {
+      final head = RRect.fromRectAndRadius(const Rect.fromLTWH(30, 24, 46, 44), const Radius.circular(18));
+      canvas.drawRRect(head, light);
+      canvas.drawCircle(const Offset(42, 37), 3.2, dark);
+      canvas.drawCircle(const Offset(64, 37), 3.2, dark);
+      canvas.drawCircle(const Offset(53, 46), 3.5, Paint()..color = const Color(0xFF1E1712));
+    } else if (backView) {
+      final headBack = RRect.fromRectAndRadius(const Rect.fromLTWH(28, 24, 50, 40), const Radius.circular(18));
+      canvas.drawRRect(headBack, body);
+      canvas.drawCircle(const Offset(34, 28), 4, dark);
+      canvas.drawCircle(const Offset(72, 28), 4, dark);
+    } else {
+      final head = Path()
+        ..moveTo(20, 42)
+        ..quadraticBezierTo(20, 18, 44, 14)
+        ..quadraticBezierTo(70, 14, 75, 38)
+        ..quadraticBezierTo(76, 61, 52, 66)
+        ..quadraticBezierTo(28, 68, 20, 52)
+        ..close();
+      canvas.drawPath(head, light);
 
-    final ear1 = Path()
-      ..moveTo(34, 24)
-      ..lineTo(30, 2)
-      ..lineTo(46, 18)
-      ..close();
-    final ear2 = Path()
-      ..moveTo(60, 25)
-      ..lineTo(56, 5)
-      ..lineTo(70, 21)
-      ..close();
-    canvas.drawPath(ear1, body);
-    canvas.drawPath(ear2, body);
+      final ear1 = Path()
+        ..moveTo(34, 24)
+        ..lineTo(30, 2)
+        ..lineTo(46, 18)
+        ..close();
+      final ear2 = Path()
+        ..moveTo(60, 25)
+        ..lineTo(56, 5)
+        ..lineTo(70, 21)
+        ..close();
+      canvas.drawPath(ear1, body);
+      canvas.drawPath(ear2, body);
 
-    final muzzle = RRect.fromRectAndRadius(const Rect.fromLTWH(40, 40, 22, 16), const Radius.circular(8));
-    canvas.drawRRect(muzzle, Paint()..color = const Color(0xFFE9B98A));
+      final muzzle = RRect.fromRectAndRadius(const Rect.fromLTWH(40, 40, 22, 16), const Radius.circular(8));
+      canvas.drawRRect(muzzle, Paint()..color = const Color(0xFFE9B98A));
 
-    canvas.drawCircle(const Offset(44, 34), 3.4, dark);
-    canvas.drawCircle(const Offset(58, 34), 3.4, dark);
-    canvas.drawCircle(const Offset(51, 44), 3.5, Paint()..color = const Color(0xFF1E1712));
-
-    final mouth = Path();
-    switch (mood) {
-      case MoodFace.happy:
-        mouth
-          ..moveTo(44, 50)
-          ..quadraticBezierTo(51, 56, 59, 50);
-        break;
-      case MoodFace.sad:
-        mouth
-          ..moveTo(44, 54)
-          ..quadraticBezierTo(51, 49, 59, 54);
-        break;
-      case MoodFace.tired:
-        mouth
-          ..moveTo(44, 52)
-          ..lineTo(59, 52);
-        break;
-      case MoodFace.normal:
-        mouth
-          ..moveTo(44, 51)
-          ..quadraticBezierTo(51, 53, 59, 51);
-        break;
+      canvas.drawCircle(const Offset(44, 34), 3.4, dark);
+      canvas.drawCircle(const Offset(58, 34), 3.4, dark);
+      canvas.drawCircle(const Offset(51, 44), 3.5, Paint()..color = const Color(0xFF1E1712));
     }
-    canvas.drawPath(
-      mouth,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2
-        ..strokeCap = StrokeCap.round
-        ..color = dark.color,
-    );
 
-    final highlight = Paint()
-      ..shader = const LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [Color(0x55FFFFFF), Color(0x00FFFFFF)],
-      ).createShader(const Rect.fromLTWH(24, 18, 96, 72));
-    canvas.drawOval(const Rect.fromLTWH(34, 32, 74, 34), highlight);
-
-    final collar = RRect.fromRectAndRadius(const Rect.fromLTWH(40, 63, 38, 8), const Radius.circular(4));
-    canvas.drawRRect(collar, Paint()..color = const Color(0xFF2E7D32));
-    canvas.drawCircle(const Offset(79, 67), 3.2, Paint()..color = const Color(0xFFFFD54F));
-
-    final turnShade = (math.sin(heading) * 0.5 + 0.5) * 0.08;
-    if (turnShade > 0.01) {
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(const Rect.fromLTWH(44, 46, 76, 43), const Radius.circular(22)),
-        Paint()..color = Colors.black.withOpacity(turnShade),
+    if (!backView) {
+      final mouth = Path();
+      switch (mood) {
+        case MoodFace.happy:
+          mouth
+            ..moveTo(44, 50)
+            ..quadraticBezierTo(51, 56, 59, 50);
+          break;
+        case MoodFace.sad:
+          mouth
+            ..moveTo(44, 54)
+            ..quadraticBezierTo(51, 49, 59, 54);
+          break;
+        case MoodFace.tired:
+          mouth
+            ..moveTo(44, 52)
+            ..lineTo(59, 52);
+          break;
+        case MoodFace.normal:
+          mouth
+            ..moveTo(44, 51)
+            ..quadraticBezierTo(51, 53, 59, 51);
+          break;
+      }
+      canvas.drawPath(
+        mouth,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2
+          ..strokeCap = StrokeCap.round
+          ..color = dark.color,
       );
     }
+
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(const Rect.fromLTWH(40, 63, 38, 8), const Radius.circular(4)),
+      Paint()..color = const Color(0xFF2E7D32),
+    );
+    canvas.drawCircle(const Offset(79, 67), 3.2, Paint()..color = const Color(0xFFFFD54F));
+
+    canvas.restore();
   }
 
   @override
   bool shouldRepaint(covariant _DogPainter oldDelegate) {
-    return oldDelegate.gait != gait || oldDelegate.tail != tail || oldDelegate.heading != heading || oldDelegate.mood != mood;
+    return oldDelegate.gait != gait ||
+        oldDelegate.tail != tail ||
+        oldDelegate.heading != heading ||
+        oldDelegate.facingRight != facingRight ||
+        oldDelegate.mood != mood;
   }
 }
 
