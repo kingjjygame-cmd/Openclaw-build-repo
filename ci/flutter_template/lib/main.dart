@@ -143,10 +143,10 @@ class SeasonMode {
 
 final List<SeasonMode> seasonModes = [
   SeasonMode(
-    key: 's1',
-    title: '시즌1 캐치! 티니핑',
-    subtitle: '현재는 프린세스 캐릭터로 동작',
-    icon: Icons.looks_one,
+    key: 's6',
+    title: '시즌6 프린세스 캐치! 티니핑',
+    subtitle: '우리가 만든 현재 버전',
+    icon: Icons.auto_awesome,
     characters: princessCharacters,
   ),
   SeasonMode(
