@@ -105,7 +105,7 @@ double revealFractionForStage(DifficultyStage stage) {
   }
 }
 
-final List<Character> characters = [
+final List<Character> princessCharacters = [
   const Character(name: '하츄핑', assetPath: 'assets/images/hachuping.webp'),
   const Character(name: '사뿐핑', assetPath: 'assets/images/graceping.png'),
   const Character(name: '아름핑', assetPath: 'assets/images/claireping.png'),
@@ -123,6 +123,60 @@ final List<Character> characters = [
   const Character(name: '슈슈핑', assetPath: 'assets/images/rellaping.png'),
   const Character(name: '큐핑', assetPath: 'assets/images/cupidping.png'),
   const Character(name: '야옹핑', assetPath: 'assets/images/kittyping.png'),
+];
+
+class SeasonMode {
+  final String key;
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final List<Character> characters;
+
+  const SeasonMode({
+    required this.key,
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.characters,
+  });
+}
+
+final List<SeasonMode> seasonModes = [
+  SeasonMode(
+    key: 's1',
+    title: '시즌1 캐치! 티니핑',
+    subtitle: '현재는 프린세스 캐릭터로 동작',
+    icon: Icons.looks_one,
+    characters: princessCharacters,
+  ),
+  SeasonMode(
+    key: 's2',
+    title: '시즌2 반짝반짝 보석 티니핑',
+    subtitle: '현재는 프린세스 캐릭터로 동작',
+    icon: Icons.looks_two,
+    characters: princessCharacters,
+  ),
+  SeasonMode(
+    key: 's3',
+    title: '시즌3 알쏭달쏭 열쇠 티니핑',
+    subtitle: '현재는 프린세스 캐릭터로 동작',
+    icon: Icons.looks_3,
+    characters: princessCharacters,
+  ),
+  SeasonMode(
+    key: 's4',
+    title: '시즌4 새콤달콤 디저트 티니핑',
+    subtitle: '현재는 프린세스 캐릭터로 동작',
+    icon: Icons.looks_4,
+    characters: princessCharacters,
+  ),
+  SeasonMode(
+    key: 's5',
+    title: '시즌5 슈팅스타 캐치! 티니핑',
+    subtitle: '캐릭터 에셋 수집 후 교체 예정',
+    icon: Icons.star,
+    characters: princessCharacters,
+  ),
 ];
 
 class StartPage extends StatelessWidget {
@@ -150,28 +204,30 @@ class StartPage extends StatelessWidget {
                 const SizedBox(height: 10),
                 const Text('🩷 티니핑 게임', style: TextStyle(fontSize: 36, fontWeight: FontWeight.w900, color: Colors.white), textAlign: TextAlign.center),
                 const SizedBox(height: 10),
-                const Text('모드를 선택해 주세요', style: TextStyle(fontSize: 17, color: Colors.white), textAlign: TextAlign.center),
-                const SizedBox(height: 20),
-                FilledButton.icon(
-                  onPressed: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const PrincessLobbyPage()),
-                    );
-                  },
-                  style: FilledButton.styleFrom(
-                    backgroundColor: const Color(0xFFEC407A),
-                    foregroundColor: Colors.white,
-                    minimumSize: const Size.fromHeight(58),
+                const Text('시즌을 선택해 주세요', style: TextStyle(fontSize: 17, color: Colors.white), textAlign: TextAlign.center),
+                const SizedBox(height: 16),
+                Expanded(
+                  child: ListView.separated(
+                    itemCount: seasonModes.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 10),
+                    itemBuilder: (context, i) {
+                      final season = seasonModes[i];
+                      return FilledButton.icon(
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(builder: (_) => PrincessLobbyPage(season: season)),
+                          );
+                        },
+                        style: FilledButton.styleFrom(
+                          backgroundColor: i == 4 ? const Color(0xFF6A1B9A) : const Color(0xFFEC407A),
+                          foregroundColor: Colors.white,
+                          minimumSize: const Size.fromHeight(58),
+                        ),
+                        icon: Icon(season.icon),
+                        label: Text(season.title),
+                      );
+                    },
                   ),
-                  icon: const Icon(Icons.auto_awesome),
-                  label: const Text('프린세스 티니핑'),
-                ),
-                const SizedBox(height: 10),
-                OutlinedButton.icon(
-                  onPressed: null,
-                  style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(58), foregroundColor: Colors.white),
-                  icon: const Icon(Icons.star),
-                  label: const Text('슈팅스타 티니핑 (준비중)'),
                 ),
               ],
             ),
@@ -183,7 +239,9 @@ class StartPage extends StatelessWidget {
 }
 
 class PrincessLobbyPage extends StatelessWidget {
-  const PrincessLobbyPage({super.key});
+  final SeasonMode season;
+
+  const PrincessLobbyPage({super.key, required this.season});
 
   Future<void> _startSingleDifficulty(BuildContext context, QuizMode mode) async {
     final selected = await showModalBottomSheet<DifficultyStage>(
@@ -277,6 +335,8 @@ class PrincessLobbyPage extends StatelessWidget {
           mode: mode,
           flow: StageFlow.singleDifficulty,
           fixedStage: selected,
+          characterPool: season.characters,
+          seasonTitle: season.title,
         ),
       ),
     );
@@ -289,6 +349,8 @@ class PrincessLobbyPage extends StatelessWidget {
           mode: mode,
           flow: StageFlow.allDifficulties,
           fixedStage: null,
+          characterPool: season.characters,
+          seasonTitle: season.title,
         ),
       ),
     );
@@ -351,7 +413,7 @@ class PrincessLobbyPage extends StatelessWidget {
               child: Column(
                 children: [
                   const SizedBox(height: 8),
-                  const Text('🩷 티니핑 퀴즈', style: TextStyle(fontSize: 38, fontWeight: FontWeight.w900, color: Colors.white)),
+                  Text('🩷 ${season.title}', style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w900, color: Colors.white), textAlign: TextAlign.center),
                   const SizedBox(height: 10),
                   const Text(
                     '플레이 방식과 진행 모드를 골라주세요',
@@ -397,10 +459,12 @@ class PrincessLobbyPage extends StatelessWidget {
                             onPressed: () {
                               Navigator.of(context).pushReplacement(
                                 MaterialPageRoute(
-                                  builder: (_) => const QuizPage(
+                                  builder: (_) => QuizPage(
                                     mode: QuizMode.quickNoTimer,
                                     flow: StageFlow.singleDifficulty,
                                     fixedStage: DifficultyStage.medium,
+                                    characterPool: season.characters,
+                                    seasonTitle: season.title,
                                   ),
                                 ),
                               );
@@ -427,12 +491,16 @@ class QuizPage extends StatefulWidget {
   final QuizMode mode;
   final StageFlow flow;
   final DifficultyStage? fixedStage;
+  final List<Character> characterPool;
+  final String seasonTitle;
 
   const QuizPage({
     super.key,
     required this.mode,
     required this.flow,
     required this.fixedStage,
+    required this.characterPool,
+    required this.seasonTitle,
   });
 
   @override
@@ -510,12 +578,12 @@ class _QuizPageState extends State<QuizPage> {
   }
 
   void _prepareStageQuestions() {
-    _questionIndices = List.generate(characters.length, (i) => i)..shuffle(_rand);
+    _questionIndices = List.generate(widget.characterPool.length, (i) => i)..shuffle(_rand);
     if (_questionIndices.length > questionsPerStage) {
       _questionIndices = _questionIndices.take(questionsPerStage).toList();
     }
     while (_questionIndices.length < questionsPerStage) {
-      _questionIndices.add(_rand.nextInt(characters.length));
+      _questionIndices.add(_rand.nextInt(widget.characterPool.length));
     }
   }
 
@@ -536,8 +604,8 @@ class _QuizPageState extends State<QuizPage> {
     _spotlightCenterFactor = _pickSpotlightCenterFactor();
     _timeLeft = widget.mode == QuizMode.timed ? secondsForStage(_stage) : -1;
 
-    final target = characters[_questionIndices[_qInStage]];
-    final wrongNames = characters.where((c) => c.name != target.name).map((c) => c.name).toList()..shuffle(_rand);
+    final target = widget.characterPool[_questionIndices[_qInStage]];
+    final wrongNames = widget.characterPool.where((c) => c.name != target.name).map((c) => c.name).toList()..shuffle(_rand);
     _choices = [target.name, wrongNames[0], wrongNames[1]]..shuffle(_rand);
 
     _timer?.cancel();
@@ -584,7 +652,7 @@ class _QuizPageState extends State<QuizPage> {
 
   Future<void> _handleTimeout() async {
     if (_answered) return;
-    final answer = characters[_questionIndices[_qInStage]].name;
+    final answer = widget.characterPool[_questionIndices[_qInStage]].name;
     setState(() {
       _answered = true;
       _selectedChoice = null;
@@ -596,7 +664,7 @@ class _QuizPageState extends State<QuizPage> {
 
   Future<void> _pick(String selected) async {
     if (_answered) return;
-    final answer = characters[_questionIndices[_qInStage]].name;
+    final answer = widget.characterPool[_questionIndices[_qInStage]].name;
     final isCorrect = selected == answer;
 
     setState(() {
@@ -643,6 +711,8 @@ class _QuizPageState extends State<QuizPage> {
               mode: widget.mode,
               flow: widget.flow,
               fixedStage: widget.fixedStage,
+              characterPool: widget.characterPool,
+              seasonTitle: widget.seasonTitle,
             ),
           ),
         );
@@ -782,7 +852,7 @@ class _QuizPageState extends State<QuizPage> {
 
   @override
   Widget build(BuildContext context) {
-    final current = characters[_questionIndices[_qInStage]];
+    final current = widget.characterPool[_questionIndices[_qInStage]];
     final answer = current.name;
 
     Color? buttonBg(String choice) {
@@ -794,7 +864,7 @@ class _QuizPageState extends State<QuizPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('티니핑 이름 맞추기 · ${_modeTitle()}'),
+        title: Text('${widget.seasonTitle} · ${_modeTitle()}'),
         centerTitle: true,
         actions: [
           Padding(
@@ -1136,6 +1206,8 @@ class ResultPage extends StatelessWidget {
   final QuizMode mode;
   final StageFlow flow;
   final DifficultyStage? fixedStage;
+  final List<Character> characterPool;
+  final String seasonTitle;
 
   const ResultPage({
     super.key,
@@ -1144,6 +1216,8 @@ class ResultPage extends StatelessWidget {
     required this.mode,
     required this.flow,
     required this.fixedStage,
+    required this.characterPool,
+    required this.seasonTitle,
   });
 
   @override
@@ -1198,7 +1272,13 @@ class ResultPage extends StatelessWidget {
                   onPressed: () {
                     Navigator.of(context).pushReplacement(
                       MaterialPageRoute(
-                        builder: (_) => QuizPage(mode: mode, flow: flow, fixedStage: fixedStage),
+                        builder: (_) => QuizPage(
+                          mode: mode,
+                          flow: flow,
+                          fixedStage: fixedStage,
+                          characterPool: characterPool,
+                          seasonTitle: seasonTitle,
+                        ),
                       ),
                     );
                   },
