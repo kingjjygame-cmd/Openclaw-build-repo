@@ -128,6 +128,63 @@ final List<Character> characters = [
 class StartPage extends StatelessWidget {
   const StartPage({super.key});
 
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFFFF9ED2), Color(0xFFB39DDB)],
+          ),
+        ),
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const SizedBox(height: 10),
+                const Text('🩷 티니핑 게임', style: TextStyle(fontSize: 36, fontWeight: FontWeight.w900, color: Colors.white), textAlign: TextAlign.center),
+                const SizedBox(height: 10),
+                const Text('모드를 선택해 주세요', style: TextStyle(fontSize: 17, color: Colors.white), textAlign: TextAlign.center),
+                const SizedBox(height: 20),
+                FilledButton.icon(
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const PrincessLobbyPage()),
+                    );
+                  },
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFFEC407A),
+                    foregroundColor: Colors.white,
+                    minimumSize: const Size.fromHeight(58),
+                  ),
+                  icon: const Icon(Icons.auto_awesome),
+                  label: const Text('프린세스 티니핑'),
+                ),
+                const SizedBox(height: 10),
+                OutlinedButton.icon(
+                  onPressed: null,
+                  style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(58), foregroundColor: Colors.white),
+                  icon: const Icon(Icons.star),
+                  label: const Text('슈팅스타 티니핑 (준비중)'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class PrincessLobbyPage extends StatelessWidget {
+  const PrincessLobbyPage({super.key});
+
   Future<void> _startSingleDifficulty(BuildContext context, QuizMode mode) async {
     final selected = await showModalBottomSheet<DifficultyStage>(
       context: context,
